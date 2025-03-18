@@ -1,0 +1,34 @@
+# 
+# a postgress container and associated adminer container
+name: mtndata
+
+services:
+
+  db:
+    image: postgres
+    container_name: db
+    restart: always
+    # set shared memory limit when using docker-compose
+    shm_size: 128mb
+    # or set shared memory limit when deploy via swarm stack
+    #volumes:
+    #  - type: tmpfs
+    #    target: /dev/shm
+    #    tmpfs:
+    #      size: 134217728 # 128*2^20 bytes = 128Mb
+    volumes:
+      - mountaineerdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: LetsClimb
+      POSTGRES_DB: mountaineerdata
+    ports:
+     - 5432:5432
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+
+volumes:
+  mountaineerdata:

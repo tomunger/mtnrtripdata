@@ -1,0 +1,83 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "main.py scrape",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "-C", "local-config.txt",
+                "scrape",
+                /*"-b",*/
+                /* "--profile", "https://www.mountaineers.org/members/will-wade"*/
+                /* "--profile", "https://www.mountaineers.org/members/colin-farrell" */
+            ]
+        },
+        {
+            "name": "main.py whowith",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "-C", "local-config.txt",
+                "whowith", "2025-04-05"
+            ]
+        },
+        {
+            "name": "main.py tripstatus",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "-C", "local-config.txt",
+                "tripstatus", "2025-03-09", "--update"
+            ]
+        },
+        {
+            "name": "main.py dido",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "-C", "local-config.txt",
+                "diddo", "deception pass",
+                "--profile", "https://www.mountaineers.org/members/colin-farrell" 
+            ]
+        },
+        {
+            "name": "main.py activity",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "-C", "local-config.txt",
+                "-S",
+                "-u", "tkunger",
+                "activity", "Sea Kayaking"
+            ]
+        }
+
+    ]
+}

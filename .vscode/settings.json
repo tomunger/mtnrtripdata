@@ -1,0 +1,25 @@
+{
+    "terminal.integrated.env.linux": {
+		"PYTHONPATH": "${workspaceFolder}/lib"
+	},
+	"terminal.integrated.env.osx": {
+		"PYTHONPATH": "${workspaceFolder}/lib"
+	},
+	"terminal.integrated.env.windows": {
+		"PYTHONPATH": "lib"
+	},
+	"cSpell.words": [
+		"interactable",
+		"mtndb",
+		"mtnschema",
+		"mtnscrape",
+		"mtnweb",
+		"Waitlisted",
+		"webelement"
+	],
+	"python.testing.pytestArgs": [
+		"tests"
+	],
+	"python.testing.unittestEnabled": false,
+	"python.testing.pytestEnabled": true
+}
