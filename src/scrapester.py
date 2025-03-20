@@ -277,7 +277,7 @@ class Scrapester():
         #
         existing_am: list[mtnschema.ActivityMember] = []
         existing_am.extend(mtn_activity.member_list)
-        for scp_participant in scp_activity.participants:
+        for index, scp_participant in enumerate(scp_activity.participants):
             
             # Find the person
             mtn_member_person = self._find_make_person_as_member(scp_participant)
@@ -291,7 +291,7 @@ class Scrapester():
                 mtn_am.registration = scp_participant.registration
                 mtn_am.member_result = scp_participant.member_result
                 existing_am.remove(mtn_am)
-                print (f"  Updated {mtn_member_person.full_name}")
+                print (f"  {index:>2}: {mtn_member_person.full_name} - {scp_participant.role}")
             else:
                 # Add the person to the activity
                 mtn_am = mtnschema.ActivityMember(
@@ -303,13 +303,13 @@ class Scrapester():
                     member_result=mtn_activity.result)
                 self._session.add(mtn_am)
                 mtn_activity.member_list.append(mtn_am)
-                print (f"  Added {mtn_member_person.full_name}")
+                print (f"  {index:>2}: {mtn_member_person.full_name} - {scp_participant.role} - Added")
 
 
         # Remove any remaining ActivityMember records
         for am in existing_am:
             self._session.delete(am)
-            print (f"  Removed {am.person.full_name}")
+            print (f"  {index:>2}: {mtn_member_person.full_name} - Removed")
         return mtn_activity
 
 
