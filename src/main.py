@@ -180,8 +180,11 @@ def command_whowith(args):
                 
             print (f"{target_person.full_name}")
             trip_list = trips_on_date(target_person, trip_date)
+            for trip in trip_list:
+                print (f"    {trip.date_start}: {trip.name} ({trip.activity_type})")
             person_list = people_on_trips(trip_list)
-            del person_list[target_person.profile_url]
+            if target_person.profile_url in person_list:
+                del person_list[target_person.profile_url]
             sorted_person_list = sorted(person_list.values(), key=lambda u: u.full_name)
 
             for co_paddler in sorted_person_list:
