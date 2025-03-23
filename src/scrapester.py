@@ -2,12 +2,9 @@
 This module contains logic to scrape the mountaineers web site using mtnscrape
 and write to the database using mtndb.py (and SQLAlchemy directly).
 '''
-import pickle
-import pathlib
 import datetime
 import time
-
-from selenium import webdriver
+import hashlib
 from sqlalchemy import select
 from sqlalchemy import create_engine
 from sqlalchemy.orm import object_session
@@ -60,7 +57,9 @@ class Scrapester():
     
     @is_scrape_future.setter
     def is_scrape_future(self, value: bool):
+        '''Set a flag to scrap all future events, regardless of their last scrape time.'''
         self._is_scrape_future = value
+
 
     def login(self):
         self.mtn_web.login(self.username, self.password)
@@ -79,11 +78,12 @@ class Scrapester():
         #
         # Go to their profile and scrape it.  
         #
+        hashedpw = hashlib.sha256(self.password.encode("utf-8")).hexdigest()
         scraped_user = self.mtn_web.navigate_current_user_profile()
         if self.mtn_person is None:
-            self.mtn_person = self._user_add(scraped_user, self.username, self.password)
+            self.mtn_person = self._user_add(scraped_user, self.username, hashedpw)
         else:
-            self._user_update(self.mtn_person, scraped_user)
+            self._user_update(self.mtn_person, scraped_user, self.username, hashedpw)
         self._session.commit()
 
 
@@ -105,8 +105,10 @@ class Scrapester():
         mtn_user.is_scrapped = True
         mtn_user.last_scrapped = datetime.datetime.now()
         mtn_user.profile_url = scraped_user.profile_url
-        mtn_user.user_name = username
-        # Don't store the password:  mtn_user.password = password
+        if username:
+            mtn_user.user_name = username
+        if password:
+            mtn_user.password = password
         mtn_user.full_name = scraped_user.full_name
         mtn_user.portrait_url = scraped_user.portrait_url
         mtn_user.email = scraped_user.email
@@ -152,7 +154,9 @@ class Scrapester():
         else: # mtnscrape.ACTIVITY_STATUS_CLOSED
             time_closed = datetime.datetime.now() - time_end
             if time_closed.days < 7:
-                # Initailly we check more often.  Double the time since close but at least 6 hours.
+                # 
+                # 
+                #  we check more often.  Double the time since close but at least 6 hours.
                 delta = datetime.timedelta(seconds=max(60 * 60 * 6, 2 * time_closed.seconds))
                 # Over 90 days we assume all changes are complete.
             elif time_closed.days < 90:
@@ -291,7 +295,7 @@ class Scrapester():
                 mtn_am.registration = scp_participant.registration
                 mtn_am.member_result = scp_participant.member_result
                 existing_am.remove(mtn_am)
-                print (f"  {index:>2}: {mtn_member_person.full_name} - {scp_participant.role}")
+                print (f"  {index+1:>2}: {mtn_member_person.full_name} - {scp_participant.role}")
             else:
                 # Add the person to the activity
                 mtn_am = mtnschema.ActivityMember(
@@ -301,15 +305,15 @@ class Scrapester():
                     is_canceled=scp_participant.is_canceled,
                     registration=scp_participant.registration,
                     member_result=mtn_activity.result)
-                self._session.add(mtn_am)
                 mtn_activity.member_list.append(mtn_am)
-                print (f"  {index:>2}: {mtn_member_person.full_name} - {scp_participant.role} - Added")
+                self._session.add(mtn_am)
+                print (f"  {index+1:>2}: {mtn_member_person.full_name} - {scp_participant.role} - Added")
 
 
         # Remove any remaining ActivityMember records
         for am in existing_am:
             self._session.delete(am)
-            print (f"  {index:>2}: {mtn_member_person.full_name} - Removed")
+            print (f"  {mtn_member_person.full_name} - Removed")
         return mtn_activity
 
 
@@ -413,7 +417,7 @@ class Scrapester():
                 if scp_am.is_canceled:
                     mtn_activity_member = self._find_activity_member_by_url(scp_am.activity_url)
                     if mtn_activity_member in target_person.activity_list:
-                        print(f"{scp_am.registration}: {scp_am.activity_url}")
+                        print(f"{scp_am.registration}: {scp_am.activity_url} - {mtn_activity.date_start}")
                         target_person.activity_list.remove(mtn_activity_member)
                         self._session.delete(mtn_activity_member)
                         print ("  Canceled from activity")
@@ -422,18 +426,19 @@ class Scrapester():
                     is_scrape = (mtn_activity.next_scrape is not None and mtn_activity.next_scrape <= datetime.datetime.now()) \
                                     or (self._is_scrape_future and time_status == TimeStatus.FUTURE)
                     if is_scrape:
-                        print(f"{scp_am.registration}: {scp_am.activity_url}")
+                        print(f"{scp_am.registration}: {scp_am.activity_url} - {mtn_activity.date_start}")
                         print("  Updating")
                         try:
                             scp_activity = self._activity_scrape(scp_am.activity_url)
-                            if scp_activity is not None:
-                                self._activity_update(mtn_activity, scp_activity)
                         except mtnweb.WebResponseException as e:
                             print (f"  scrape error {e.page_link} item {e.message}.")
                             if e.__context__:
-                                print (f"    cause: {type(e.__context__)} : {e.args}")   
+                                print (f"    cause: {type(e.__context__)} : {e.args}") 
+                            # TODO: record failure.  
                             raise         
-                            # TODO: else some record of the failure, retry later, and notify.
+                        if scp_activity is not None:
+                            self._activity_update(mtn_activity, scp_activity)
+                            # TODO: catch and report, retry later, and notify.
                     # else - not yet time to update
             else:
                 if scp_am.is_canceled:
@@ -445,7 +450,7 @@ class Scrapester():
                     try:
                         scp_activity = self._activity_scrape(scp_am.activity_url)
                         if scp_activity:
-                            print (f"  {scp_activity.name}: {scp_activity.status} {scp_activity.result}")
+                            print (f"  {scp_activity.name}: {scp_activity.status}, {scp_activity.date_start}, {scp_activity.result}")
                             mtn_activity = self._activity_add(scp_activity)
                     except mtnweb.WebResponseException as e:
                         print (f"  scrape error {e.page_link} item {e.message}.")

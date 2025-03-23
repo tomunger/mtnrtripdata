@@ -13,6 +13,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 
 import econfig
 
+
 PROFILE_PAGE_PROFILE = "Profile"
 PROFILE_PAGE_ACTIVITIES = "My Activities"
 

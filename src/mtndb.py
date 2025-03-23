@@ -30,7 +30,9 @@ class MtnDB():
         mtnschema.Base.metadata.drop_all(self.engine)
 
     def session(self) -> Session:
-        return Session(self.engine)
+        s = Session(self.engine)
+        # s.autoflush = False
+        return s
 
     def person_find_by_url(self, session: Session, profile_url: str) -> mtnschema.Person | None:
         stmt = session.query(mtnschema.Person).filter(mtnschema.Person.profile_url == profile_url)
@@ -58,7 +60,9 @@ class MtnDB():
         
     def person_add(self,  session: Session, person: mtnschema.Person):
         session.add(person)
+        session.flush()
 
     def activity_add(self,  session: Session, activity: mtnschema.Activity):
         session.add(activity)
+        session.flush()
         

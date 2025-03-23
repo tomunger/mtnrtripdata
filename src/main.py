@@ -83,13 +83,11 @@ def command_scrape(args):
                                     econfig.get(econfig.MTN_WEB_USERNAME, override=args.user), 
                                     econfig.get(econfig.MTN_WEB_PASSWORD, override=args.password))
             scraper.is_scrape_future = args.fsf
-            try:
-                scraper.login()
-                scraper.scrape_activity_for_profile(args.profile)
-                print ("Done scraping")
-            except Exception as e:
-                print(f"An error occurred: {e}")
-                traceback.print_exc()
+
+            scraper.login()
+            scraper.scrape_activity_for_profile(args.profile)
+            print ("Done scraping")
+
 
 
                 

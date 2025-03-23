@@ -19,12 +19,13 @@
             "program": "${workspaceFolder}/src/main.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
+            "env": {"PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"},
             "args": [
                 "-C", "local-config.txt",
                 "scrape",
                 /*"-b",*/
-                /* "--profile", "https://www.mountaineers.org/members/will-wade"*/
-                /* "--profile", "https://www.mountaineers.org/members/colin-farrell" */
+                /* "--profile", "https://www.mountaineers.org/members/will-wade" */
+                /* "--profile", "https://www.mountaineers.org/members/colin-farrell"  */
             ]
         },
         {
@@ -48,7 +49,7 @@
             "console": "integratedTerminal",
             "args": [
                 "-C", "local-config.txt",
-                "tripstatus", "2025-03-09", "--update"
+                "tripstatus", "2025-04-06", "--update"
             ]
         },
         {

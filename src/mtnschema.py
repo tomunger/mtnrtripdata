@@ -1,6 +1,6 @@
 import typing as t
 import datetime
-from typing import Optional
+
 from sqlalchemy import ForeignKey
 from sqlalchemy import String, DateTime, Date
 from sqlalchemy.orm import DeclarativeBase
@@ -12,7 +12,7 @@ from sqlalchemy.orm import relationship
 URL_LENGTH = 600
 PERSON_NAME_LENGTH = 100
 USER_NAME_LENGTH = 60
-PASSWORD_LENGTH = 60
+PASSWORD_LENGTH = 200
 EMAIL_LENGTH = 200
 BRANCH_LENGTH = 60
 ROLE_LENGTH = 100
@@ -49,7 +49,7 @@ class Person(Base):
     branch: Mapped[str] = mapped_column(String(BRANCH_LENGTH), default="")
 
     is_scrapped: Mapped[bool] = mapped_column(default=False)  
-    last_scrapped: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, default=None)
+    last_scrapped: Mapped[t.Optional[datetime.datetime]] = mapped_column(DateTime, default=None)
 
     activity_list: Mapped[t.List["ActivityMember"]] = relationship("ActivityMember", back_populates="person", 
                                                     cascade="all, delete, delete-orphan",
