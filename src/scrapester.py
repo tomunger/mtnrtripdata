@@ -387,8 +387,14 @@ class Scrapester():
 
 
 
-    def scrape_activity_for_profile(self, profile_url: str = ""):
-     
+    def scrape_person_activity(self, profile_url: str = ""):
+        """
+        Scrape a person's activity list.  
+
+        Args:
+            profile_url (str, optional):  Optionally, the URL of a profile to scrape
+            If not given, the login user's profile is scraped. Defaults to "".
+        """
 
         if not profile_url:
             profile_url = self.mtn_person.profile_url

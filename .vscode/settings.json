@@ -9,11 +9,13 @@
 		"PYTHONPATH": "lib"
 	},
 	"cSpell.words": [
+		"econfig",
 		"interactable",
 		"mtndb",
 		"mtnschema",
 		"mtnscrape",
 		"mtnweb",
+		"scrapester",
 		"Waitlisted",
 		"webelement"
 	],

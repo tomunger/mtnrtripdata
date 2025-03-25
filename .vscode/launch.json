@@ -41,6 +41,33 @@
             ]
         },
         {
+            "name": "maint.py whowith",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/maint.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "whowith", 
+                "-C", "local-config.txt", 
+                "2025-04-05"
+            ]
+        },
+        {
+            "name": "maint.py diddo",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/maint.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "diddo", 
+                "-C", "local-config.txt", 
+                "--profile", "https://www.mountaineers.org/members/colin-farrell",
+                "Deception"
+            ]
+        },
+        {
             "name": "main.py tripstatus",
             "type": "debugpy",
             "request": "launch",
