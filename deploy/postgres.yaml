@@ -23,13 +23,13 @@ services:
       POSTGRES_PASSWORD: LetsClimb
       POSTGRES_DB: mountaineerdata
     ports:
-     - 5432:5432
+     - 9010:5432
 
   adminer:
     image: adminer
     restart: always
     ports:
-      - 8080:8080
+      - 9011:8080
 
 volumes:
   mountaineerdata:
