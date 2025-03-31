@@ -24,7 +24,7 @@ app = typer.Typer(rich_markup_mode="rich")
 def whowith(
     config: t.Annotated[str, typer.Option("-C", help="The configuration file")],
     date_str: t.Annotated[str, typer.Argument(help="The trip date")],
-    user: t.Annotated[str, typer.Option("-u", help="Target person's user name")] = None,
+    user: t.Annotated[str, typer.Option("-u", envvar=econfig.MTN_WEB_USERNAME, help="Target person's user name")] = None,
     # password: t.Annotated[str, typer.Option("-p", help="The password to use for the scrape")] = "",
     echosql: t.Annotated[bool, typer.Option("-S", help="Echo SQL queries")] = False,
     profile: t.Annotated[str, typer.Option(help="Target person's profile")] = None,
@@ -87,7 +87,7 @@ def diddo(
     config: t.Annotated[str, typer.Option("-C", help="The configuration file")],
     trip_phrase: t.Annotated[str, typer.Argument(help="The phrase to search for")],
     echosql: t.Annotated[bool, typer.Option("-S", help="Echo SQL queries")] = False,
-    user: t.Annotated[str, typer.Option("-u", help="Login user name")] = None,
+    user: t.Annotated[str, typer.Option("-u", envvar=econfig.MTN_WEB_USERNAME, help="Login user name")] = None,
     profile: t.Annotated[str, typer.Option(help="Target person's profile")] = None,
 ):
     econfig.load_env(config)
@@ -95,7 +95,7 @@ def diddo(
     with util.make_mtndb(is_echo=echosql) as mtn_db:
         with mtn_db.session() as mtn_session:
             try:
-                target_person = mtn_db.select_person_by(mtn_session, profile, econfig.get(econfig.MTN_WEB_USERNAME, override=user))
+                target_person = mtn_db.select_person_by(mtn_session, profile, user)
             except ValueError as e:
                 print(f"Error: {e}")
                 return
@@ -113,8 +113,8 @@ def tripstatus(
     trip_date_str: t.Annotated[str, typer.Argument(help="The trip date")],
     echosql: t.Annotated[bool, typer.Option("-S", help="Echo SQL queries")] = False,
     update: t.Annotated[bool, typer.Option(help="Update the trip")] = False,
-    user: t.Annotated[str, typer.Option("-u", help="Login user name")] = None,
-    password: t.Annotated[str, typer.Option("-p", help="Login password")] = None,
+    user: t.Annotated[str, typer.Option("-u", envvar=econfig.MTN_WEB_USERNAME, help="Login user name")] = None,
+    password: t.Annotated[str, typer.Option("-p", envvar=econfig.MTN_WEB_PASSWORD, help="Login password")] = None,
     profile: t.Annotated[str, typer.Option(help="Target person's profile")] = None,
 ):
     econfig.load_env(config)
@@ -129,13 +129,13 @@ def tripstatus(
             if update:
                 mtn_web = util.make_mtnweb()
                 scraper = scrapester.Scrapester(mtn_web, mtn_db,
-                                econfig.get(econfig.MTN_WEB_USERNAME, override=user), 
-                                econfig.get(econfig.MTN_WEB_PASSWORD, override=password),
+                                user, 
+                                password,
                                 session=mtn_session)
                 scraper.login()
             try:
                 try:
-                    target_person = mtn_db.select_person_by(mtn_session, profile, econfig.get(econfig.MTN_WEB_USERNAME, override=user))
+                    target_person = mtn_db.select_person_by(mtn_session, profile, user)
                 except ValueError as e:
                     print(f"Error: {e}")
                     return
@@ -179,8 +179,8 @@ def scrape(
     echosql: t.Annotated[bool, typer.Option("-S", help="Echo SQL queries")] = False,
     browser: t.Annotated[bool, typer.Option("-b", help="Show browser window")] = False,
     fsf: t.Annotated[bool, typer.Option(help="Force scrape all future activities")] = False,
-    user: t.Annotated[str, typer.Option("-u", help="Login user name")] = None,
-    password: t.Annotated[str, typer.Option("-p", help="Login password")] = None,
+    user: t.Annotated[str, typer.Option("-u", envvar=econfig.MTN_WEB_USERNAME, help="Login user name")] = None,
+    password: t.Annotated[str, typer.Option("-p", envvar=econfig.MTN_WEB_PASSWORD, help="Login password")] = None,
     profile: t.Annotated[str, typer.Option(help="Target person's profile")] = None,
 ):
     econfig.load_env(config)
@@ -188,8 +188,8 @@ def scrape(
     with util.make_mtnweb(is_visible=browser) as mtn_web:
         with util.make_mtndb(is_echo=echosql) as mtn_db:
             scraper = scrapester.Scrapester(mtn_web, mtn_db, 
-                                    econfig.get(econfig.MTN_WEB_USERNAME, override=user), 
-                                    econfig.get(econfig.MTN_WEB_PASSWORD, override=password))
+                                    user, 
+                                    password)
             scraper.is_scrape_future = fsf
 
             scraper.login()
