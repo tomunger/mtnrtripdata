@@ -9,3 +9,8 @@ local*
 
 # Virtual environments
 .venv
+
+# python-dotenv environment configuration files.
+.env
+.env.*
+

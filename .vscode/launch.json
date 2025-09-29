@@ -22,7 +22,6 @@
             "env": {"PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"},
             "args": [
                 "scrape",
-                "-C", "local-config.txt",
                 /*"-b",*/
                 /*"--profile", "https://www.mountaineers.org/members/will-wade" */
                 /* "--profile", "https://www.mountaineers.org/members/colin-farrell" */

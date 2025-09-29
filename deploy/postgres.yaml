@@ -31,5 +31,19 @@ services:
     ports:
       - 9011:8080
 
+  neo4j:
+    image: neo4j:2025.08
+    container_name: neo4j
+    restart: always
+    volumes:
+      - mountaineerneo4j:/data
+    ports:
+      - 9012:7687 # database
+      - 9013:7474 # web interface
+    # environment:
+    #   NEO4J_AUTH: neo4j/LetsClimb
+
 volumes:
   mountaineerdata:
+  mountaineerneo4j:
+
