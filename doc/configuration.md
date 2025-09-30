@@ -7,10 +7,15 @@ Example
 
     DATABASE_URL=postgresql+psycopg://postgres:LetsClimb@localhost/mountaineerdata
 
-    MTN_WEB_URL=https://www.mountaineers.org/
 
+    NEO4J_URL=bolt://localhost:9012
+    NEO4J_USERNAME=neo4j
+    NEO4J_PASSWORD=LetsClimb
+
+
+    MTN_WEB_URL=https://www.mountaineers.org/
     MTN_WEB_USERNAME=tkunger
-    MTN_WEB_PASSWORD=exexex
+    MTN_WEB_PASSWORD=...
 
     BROWSER=firefox
     FIREFOX_PATH=/Applications/Firefox.app/Contents/MacOS/firefox
@@ -18,6 +23,10 @@ Example
 ## DATABASE_URL
 
 An SQLAlchemy database URL
+
+## NEO4J
+
+Configure access to the neo4j database.  See [postgres.yaml](../deploy/postgres.yaml)
 
 ## MTN_WEB_URL
 
