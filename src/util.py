@@ -32,7 +32,7 @@ def parse_date(date_str: str) -> datetime.date:
 
 
 
-def make_mtnweb(is_visible: bool = False) -> mtnweb.ScrapeMtnWeb:
+def make_mtnweb(is_visible: bool = True) -> mtnweb.ScrapeMtnWeb:
     options = webdriver.FirefoxOptions()
     options.binary_location = econfig.get(econfig.FIREFOX_PATH)
     if not is_visible: 
@@ -46,3 +46,9 @@ def make_mtndb(is_echo: bool = False) -> mtndb.MtnDB:
     engine = create_engine(econfig.get(econfig.DATABASE_URL), echo=is_echo)
     mtn_db = mtndb.MtnDB(engine)
     return mtn_db
+
+
+def make_neo4j_db():
+    """Create Neo4j database connection using environment credentials."""
+    import neo4j_db
+    return neo4j_db.Neo4jDB()

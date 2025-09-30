@@ -1,0 +1,6 @@
+Prepare for a significant refactoring.  Examine the code and think about the structure.  
+A major feature is the relationship between people and activities.  These are expressed in 
+mtnschema.py using sqlalchemy.  This has not worked out well.  
+I want to change to using the neo4j database.  There are people and activities.  The relationship 
+is that people participate in activities.  'participate' replaces the sqlalchem type 'ActivityMember'.
+The URL, username, and password for neo4j are in the environment, accessed through the econfig.py module, loaded from .env

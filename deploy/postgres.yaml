@@ -1,5 +1,5 @@
 # 
-# a postgress container and associated adminer container
+# a postgres container and associated adminer container
 #
 name: mtndata
 
@@ -40,8 +40,27 @@ services:
     ports:
       - 9012:7687 # database
       - 9013:7474 # web interface
-    # environment:
-    #   NEO4J_AUTH: neo4j/LetsClimb
+    environment:
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+
+  # Deploy Cypher MCP Server
+  mcp-neo4j-cypher-server:
+    image: mcp/neo4j-cypher:latest
+    ports:
+      - '9014:9014'
+    environment:
+      - NEO4J_URI=bolt://host.docker.internal:9012
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD                # Empty it fills from the environment.
+      - NEO4J_DATABASE=neo4j
+      - NEO4J_TRANSPORT=http
+      - NEO4J_MCP_SERVER_HOST=0.0.0.0 # must be 0.0.0.0 for sse  or http transport in Docker
+      - NEO4J_MCP_SERVER_PORT=9014
+      - NEO4J_MCP_SERVER_PATH=/api/mcp/
+      - NEO4J_NAMESPACE=mountaineers
+    depends_on:
+      - neo4j
 
 volumes:
   mountaineerdata:
