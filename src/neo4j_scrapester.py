@@ -393,24 +393,4 @@ class Neo4jScrapester():
                         print(f"  scrape error {e.page_link} item {e.message}.")
                         if e.__context__:
                             print(f"    cause: {type(e.__context__)} : {e.args}") 
-                        raise             
-
-
-# Legacy compatibility - keep original Scrapester class but add Neo4j option
-class Scrapester():
-    """Legacy Scrapester class - delegates to either SQLAlchemy or Neo4j implementation."""
-    
-    def __init__(self, mtn_web: mtnweb.ScrapeMtnWeb, mtn_db, username: str, password: str, session=None, use_neo4j: bool = False):
-        if use_neo4j:
-            # Use Neo4j implementation
-            import neo4j_db
-            neo_db = neo4j_db.Neo4jDB() if isinstance(mtn_db, neo4j_db.Neo4jDB) else neo4j_db.Neo4jDB()
-            self._impl = Neo4jScrapester(mtn_web, neo_db, username, password)
-        else:
-            # Use original SQLAlchemy implementation - import the original scrapester
-            import scrapester as original_scrapester
-            self._impl = original_scrapester.Scrapester(mtn_web, mtn_db, username, password, session)
-    
-    def __getattr__(self, name):
-        # Delegate all method calls to the implementation
-        return getattr(self._impl, name)
+                        raise

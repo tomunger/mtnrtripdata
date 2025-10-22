@@ -1,9 +1,7 @@
 import datetime
 import re
 from selenium import webdriver
-from sqlalchemy import create_engine
 
-import mtndb
 import mtnweb
 import econfig
 
@@ -40,12 +38,6 @@ def make_mtnweb(is_visible: bool = True) -> mtnweb.ScrapeMtnWeb:
     driver = webdriver.Firefox(options=options)
     mtn_web = mtnweb.ScrapeMtnWeb(driver)
     return mtn_web
-
-
-def make_mtndb(is_echo: bool = False) -> mtndb.MtnDB:
-    engine = create_engine(econfig.get(econfig.DATABASE_URL), echo=is_echo)
-    mtn_db = mtndb.MtnDB(engine)
-    return mtn_db
 
 
 def make_neo4j_db():
