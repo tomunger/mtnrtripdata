@@ -6,6 +6,7 @@ Neo4j version of scrapester.py - replaces SQLAlchemy with graph database.
 import datetime
 import time
 import hashlib
+import typing as t
 from enum import Enum
 
 import mtnweb
@@ -22,17 +23,25 @@ class TimeStatus(Enum):
 class Neo4jScrapester():
     """Neo4j version of Scrapester - replaces SQLAlchemy with graph database."""
 
-    def __init__(self, mtn_web: mtnweb.ScrapeMtnWeb, neo_db: neo4j_db.Neo4jDB, username: str, password: str):
+    def __init__(
+        self, 
+        mtn_web: mtnweb.ScrapeMtnWeb, 
+        neo_db: neo4j_db.Neo4jDB, 
+        username: str, 
+        password: str,
+        progress_callback: t.Callable[[str], None] | None = None
+    ):
         self.mtn_web = mtn_web
         self.neo_db = neo_db
         self.username = username
         self.password = password
+        self.progress_callback = progress_callback or (lambda msg: None)
 
         self._is_scrape_future = False
         self.mtn_person: neo4j_db.Person | None = None
 
         # Find the logged-in user
-        self.mtn_person = self.neo_db.person_find_by_username(self.username)
+        self.mtn_person = self.neo_db.person_by_username(self.username)
 
     def close(self):
         # Neo4j connections are managed by context manager
@@ -95,7 +104,7 @@ class Neo4jScrapester():
         return self.neo_db.person_update(mtn_user)
 
     def _find_update_user_by_profile(self, profile_url: str) -> neo4j_db.Person:
-        target_user = self.neo_db.person_find_by_url(profile_url)
+        target_user = self.neo_db.person_by_url(profile_url)
 
         is_scrape = target_user is None \
                         or target_user.last_scrapped is None \
@@ -140,6 +149,7 @@ class Neo4jScrapester():
 
     @classmethod
     def _time_status(cls, mtn_activity: neo4j_db.Activity) -> TimeStatus:
+        '''Determine if an activity is in the past, current, or future.'''
         time_start = datetime.datetime.combine(mtn_activity.date_start, datetime.time(0,0,0))
         time_end = datetime.datetime.combine(mtn_activity.date_end, datetime.time(0,0,0)) + datetime.timedelta(days=1)
         time_now = datetime.datetime.now()
@@ -152,7 +162,7 @@ class Neo4jScrapester():
 
     def _find_make_person_as_member(self, scp_activity_member: mtnweb.ScrapedActivityMember) -> neo4j_db.Person:
         '''Find an existing person or create a new one from the details that came from their participation in an activity.'''
-        mtn_member_person = self.neo_db.person_find_by_url(scp_activity_member.member_url)
+        mtn_member_person = self.neo_db.person_by_url(scp_activity_member.member_url)
         if not mtn_member_person:
             # Create a user with limited information and marking them as not yet scraped.
             mtn_member_person = neo4j_db.Person(
@@ -205,8 +215,8 @@ class Neo4jScrapester():
                 registration=scp_participant.registration,
                 member_result=mtn_activity.result
             )
-            self.neo_db.create_participation(mtn_member_person, mtn_activity, participation)
-            print(f"  Added {mtn_member_person.full_name}")
+            self.neo_db.participation_create(mtn_member_person, mtn_activity, participation)
+            self.progress_callback(f"  Added {mtn_member_person.full_name}")
 
         return mtn_activity
 
@@ -236,7 +246,7 @@ class Neo4jScrapester():
         self.neo_db.activity_update(mtn_activity)
 
         # Get current participants
-        current_participants = self.neo_db.get_activity_participants(mtn_activity)
+        current_participants = self.neo_db.person_part_by_activity(mtn_activity)
         current_participant_urls = {person.profile_url: (person, participation) 
                                    for person, participation in current_participants}
 
@@ -254,10 +264,10 @@ class Neo4jScrapester():
                     registration=scp_participant.registration,
                     member_result=scp_participant.member_result
                 )
-                self.neo_db.update_participation(mtn_member_person, mtn_activity, updated_participation)
+                self.neo_db.participation_update(mtn_member_person, mtn_activity, updated_participation)
                 # Remove from current list so we know it was processed
                 del current_participant_urls[mtn_member_person.profile_url]
-                print(f"  {index+1:>2}: {mtn_member_person.full_name} - {scp_participant.role}")
+                self.progress_callback(f"  {index+1:>2}: {mtn_member_person.full_name} - {scp_participant.role}")
             else:
                 # Add new participation
                 participation = neo4j_db.Participation(
@@ -266,13 +276,13 @@ class Neo4jScrapester():
                     registration=scp_participant.registration,
                     member_result=mtn_activity.result
                 )
-                self.neo_db.create_participation(mtn_member_person, mtn_activity, participation)
-                print(f"  {index+1:>2}: {mtn_member_person.full_name} - {scp_participant.role} - Added")
+                self.neo_db.participation_create(mtn_member_person, mtn_activity, participation)
+                self.progress_callback(f"  {index+1:>2}: {mtn_member_person.full_name} - {scp_participant.role} - Added")
 
         # Remove any remaining participants that are no longer in the activity
         for person_url, (person, participation) in current_participant_urls.items():
-            self.neo_db.remove_participation(person, mtn_activity)
-            print(f"  {person.full_name} - Removed")
+            self.neo_db.participation_remove(person, mtn_activity)
+            self.progress_callback(f"  {person.full_name} - Removed")
 
         return mtn_activity
 
@@ -288,22 +298,24 @@ class Neo4jScrapester():
                 return td
 
             except mtnweb.WebResponseException as e:
-                print(f"  retryable error {e.page_link} item {e.message}.")
+                # An error interacting with the site which might resolve on retry.
+                self.progress_callback(f"  retryable error {e.page_link} item {e.message}.")
                 if e.__context__:
-                    print(f"    cause: {type(e.__context__)} : {e.args}") 
+                    self.progress_callback(f"    cause: {type(e.__context__)} : {e.args}") 
                 if try_count == 0:
                     raise
             
+                # traceback.print_exc()
                 is_complete = False
                 delay = e.delay_seconds if e.delay_seconds else 60
-                print(f"  Will retry in {delay} seconds")
+                self.progress_callback(f"  Will retry in {delay} seconds")
                 time.sleep(delay)
 
             except TimeoutError as e:
-                print(f"  timeout on {activity_link} item {e.args}.")
+                self.progress_callback(f"  timeout on {activity_link} item {e.args}.")
                 if try_count == 0:
                     raise
-                print("  Will retry")
+                self.progress_callback("  Will retry")
 
             time.sleep(20)
 
@@ -315,7 +327,7 @@ class Neo4jScrapester():
             return None
             
         # Get all activities for the person
-        activities_with_participation = self.neo_db.get_person_activities(self.mtn_person)
+        activities_with_participation = self.neo_db.activity_part_for_person(self.mtn_person)
         for activity, participation in activities_with_participation:
             if activity.activity_url == activity_url:
                 return activity, participation
@@ -327,7 +339,7 @@ class Neo4jScrapester():
         try:
             self._activity_update(mtn_activity, scp_activity)
         except Exception as e:
-            print(f"Error updating activity: {e}")
+            self.progress_callback(f"Error updating activity: {e}")
             raise e
 
     def scrape_person_activity(self, profile_url: str = ""):
@@ -350,30 +362,30 @@ class Neo4jScrapester():
 
         for scp_am in scp_member_activity_list:
             # Find the activity in Neo4j
-            mtn_activity = self.neo_db.activity_find_by_url(scp_am.activity_url)
+            mtn_activity = self.neo_db.activity_by_url(scp_am.activity_url)
 
             if mtn_activity:
                 time_status = self._time_status(mtn_activity)
                 if scp_am.is_canceled:
-                    # Remove the participation if it exists
-                    existing_participation = self.neo_db.find_participation(target_person, mtn_activity)
+                                        # Remove the participation if it exists
+                    existing_participation = self.neo_db.participation_find(target_person, mtn_activity)
                     if existing_participation:
-                        print(f"{scp_am.registration}: {scp_am.activity_url} - {mtn_activity.date_start}")
-                        self.neo_db.remove_participation(target_person, mtn_activity)
-                        print("  Canceled from activity")
+                        self.progress_callback(f"{scp_am.registration}: {scp_am.activity_url} - {mtn_activity.date_start}")
+                        self.neo_db.participation_remove(target_person, mtn_activity)
+                        self.progress_callback("  Canceled from activity")
                 else:
                     # Check if it needs to be updated
                     is_scrape = (mtn_activity.next_scrape is not None and mtn_activity.next_scrape <= datetime.datetime.now()) \
                                     or (self._is_scrape_future and time_status == TimeStatus.FUTURE)
                     if is_scrape:
-                        print(f"{scp_am.registration}: {scp_am.activity_url} - {mtn_activity.date_start}")
-                        print("  Updating")
+                        self.progress_callback(f"{scp_am.registration}: {scp_am.activity_url} - {mtn_activity.date_start}")
+                        self.progress_callback("  Updating")
                         try:
                             scp_activity = self._activity_scrape(scp_am.activity_url)
                         except mtnweb.WebResponseException as e:
-                            print(f"  scrape error {e.page_link} item {e.message}.")
+                            self.progress_callback(f"  scrape error {e.page_link} item {e.message}.")
                             if e.__context__:
-                                print(f"    cause: {type(e.__context__)} : {e.args}") 
+                                self.progress_callback(f"    cause: {type(e.__context__)} : {e.args}") 
                             raise         
                         if scp_activity is not None:
                             self._activity_update(mtn_activity, scp_activity)
@@ -382,15 +394,15 @@ class Neo4jScrapester():
                     # No action on canceled activity that is not in the database.
                     pass
                 else:
-                    print(f"{scp_am.registration}: {scp_am.activity_url}")
-                    print("  Creating")    
+                    self.progress_callback(f"{scp_am.registration}: {scp_am.activity_url}")
+                    self.progress_callback("  Creating")    
                     try:
                         scp_activity = self._activity_scrape(scp_am.activity_url)
                         if scp_activity:
-                            print(f"  {scp_activity.name}: {scp_activity.status}, {scp_activity.date_start}, {scp_activity.result}")
+                            self.progress_callback(f"  {scp_activity.name}: {scp_activity.status}, {scp_activity.date_start}, {scp_activity.result}")
                             mtn_activity = self._activity_add(scp_activity)
                     except mtnweb.WebResponseException as e:
-                        print(f"  scrape error {e.page_link} item {e.message}.")
+                        self.progress_callback(f"  scrape error {e.page_link} item {e.message}.")
                         if e.__context__:
-                            print(f"    cause: {type(e.__context__)} : {e.args}") 
+                            self.progress_callback(f"    cause: {type(e.__context__)} : {e.args}") 
                         raise

@@ -1,4 +1,5 @@
 import typing as t
+import datetime
 
 import typer
 from rich import print
@@ -6,10 +7,9 @@ from rich.table import Table
 from rich.padding import Padding
 from rich import box
 
-
-
 import econfig
 import util
+import mtn_logic
 
 econfig.load_env()
 
@@ -21,56 +21,46 @@ app = typer.Typer(rich_markup_mode="rich")
 
 @app.command()
 def whowith(
-    date_str: t.Annotated[str, typer.Argument(help="The trip date")],
-    user: t.Annotated[str, typer.Option("-u", envvar=econfig.MTN_WEB_USERNAME, help="Target person's user name")] = None,
-    profile: t.Annotated[str, typer.Option(help="Target person's profile")] = None,
+    person: t.Annotated[str, typer.Argument(help="Target person's name, profile url, or user name")],
+    date_str: t.Annotated[str, typer.Argument(help="The trip date")]
 ):
     """
     When did I paddle with the people on this trip?
 
-    The trip is identified by [bold yellow]date_str[/bold yellow].  All trips happening on that date will be
-    reported on.  
 
-    Your identify is determined by the user (-u) name or the --profile. 
+    The trip is identified by [bold yellow]date_str[/bold yellow].  All trips happening on that date will be
+    reported on.
+
     """
-    if profile is None and user is None:
-        print ("Error: You must specify a user name or a profile URL")
-        return
+
 
     trip_date = util.parse_date(date_str)
     
-    # Neo4j implementation
+    # Use business logic layer
     with util.make_neo4j_db() as neo_db:
-        # Find target person
-        if profile:
-            target_person = neo_db.person_find_by_url(profile)
-        else:
-            target_person = neo_db.person_find_by_username(econfig.get(econfig.MTN_WEB_USERNAME, override=user))
-        
-        if not target_person:
-            print("Error: Person not found")
-            return
+        logic = mtn_logic.MountaineerLogic(neo_db)
 
-        print(f"{target_person.full_name}")
+        try:
+            awi = logic.who_with(person, trip_date)
+        except mtn_logic.MtnException as e:
+            print(f"Error: {e}")
+            return
         
-        # Get activities on the specified date
-        trip_list = neo_db.get_activities_on_date(target_person, trip_date)
-        for trip in trip_list:
-            print(f"    {trip.date_start}: {trip.name} ({trip.activity_type})")
         
-        # Get all people who participated in these activities
-        person_list = neo_db.get_people_on_activities(trip_list)
-        if target_person.profile_url in person_list:
-            del person_list[target_person.profile_url]
-        sorted_person_list = sorted(person_list.values(), key=lambda u: u.full_name)
+        print(f"{awi.target_person.full_name}")
+        
+        for activity in awi.target_activities:
+            print(f"    {activity.date_start}: {activity.name} ({activity.activity_type})")
+        
+
+        sorted_person_list = sorted(awi.shared, key=lambda u: u.shared_person.full_name)
 
         for co_paddler in sorted_person_list:
-            print(f"  {co_paddler.full_name}")
-            co_table = Table("start", "Activity", "Type", box=TABLE_BOX_STYE)
+            print(f"  {co_paddler.shared_person.full_name}")
+            co_table = Table("Start", "Activity", "Type", box=TABLE_BOX_STYE)
             
             # Get shared activities between target person and co-paddler
-            shared_activities = neo_db.get_shared_activities(target_person, co_paddler)
-            for activity in shared_activities:
+            for activity in co_paddler.activites:
                 co_table.add_row(str(activity.date_start), activity.name, activity.activity_type)
             
             if co_table.row_count > 0:
@@ -85,41 +75,57 @@ def whowith(
 
 @app.command()
 def diddo(
-    trip_phrase: t.Annotated[str, typer.Argument(help="The phrase to search for")],
-    user: t.Annotated[str, typer.Option("-u", envvar=econfig.MTN_WEB_USERNAME, help="Login user name")] = None,
-    profile: t.Annotated[str, typer.Option(help="Target person's profile")] = None,
-):
-    trip_phrase_lower = trip_phrase.lower()
-    
-    # Neo4j implementation
+        person: t.Annotated[str, typer.Argument(help="Target person's profile url, name, or username")],
+        trip_phrase: t.Annotated[str, typer.Argument(help="The phrase to search for in activity titles")],
+    ):
+    """Search for activities containing a phrase."""
+    # Use business logic layer
     with util.make_neo4j_db() as neo_db:
-        # Find target person
-        if profile:
-            target_person = neo_db.person_find_by_url(profile)
-        else:
-            target_person = neo_db.person_find_by_username(user)
-        
-        if not target_person:
-            print("Error: Person not found")
+        logic = mtn_logic.MountaineerLogic(neo_db)
+
+        try:
+            matching_activities = logic.did_do(person, trip_phrase)
+        except mtn_logic.MtnException as e:
+            print(f"Error: {e}")
+            return
+    
+        print(f"{person} did do '{trip_phrase}':")
+        for activity in matching_activities:
+            print(f"  {activity.date_start}: {activity.name} ({activity.activity_type})")
+
+
+@app.command()
+def didwhen(
+        person: t.Annotated[str, typer.Argument(help="Target person's profile url, name, or username")],
+        date_str: t.Annotated[str, typer.Argument(help="The activity date")],
+    ):
+    """Search for activities on a specific date."""
+    # Use business logic layer
+    with util.make_neo4j_db() as neo_db:
+        logic = mtn_logic.MountaineerLogic(neo_db)
+
+        try:
+            activity_date = util.parse_date(date_str)
+            matching_activities = logic.did_when(person, activity_date)
+        except mtn_logic.MtnException as e:
+            print(f"Error: {e}")
             return
         
-        print(f"{target_person.full_name} did do '{trip_phrase}':")
-        
-        # Get all activities for the person
-        activities_with_participation = neo_db.get_person_activities(target_person)
-        for activity, participation in activities_with_participation:
-            if trip_phrase_lower in activity.name.lower():
-                print(f"  {activity.date_start}: {activity.name} ({activity.activity_type})")
+        print(f"{person} did on {date_str}:")
+        for activity in matching_activities:
+            print(f"  {activity.date_start}: {activity.name} ({activity.activity_type})")
+
 
 
 @app.command()
 def tripstatus(
-    trip_date_str: t.Annotated[str, typer.Argument(help="The trip date")],
-    update: t.Annotated[bool, typer.Option(help="Update the trip")] = False,
-    user: t.Annotated[str, typer.Option("-u", envvar=econfig.MTN_WEB_USERNAME, help="Login user name")] = None,
-    password: t.Annotated[str, typer.Option("-p", envvar=econfig.MTN_WEB_PASSWORD, help="Login password")] = None,
-    profile: t.Annotated[str, typer.Option(help="Target person's profile")] = None,
-):
+        person: t.Annotated[str, typer.Argument(help="Target person's profile url, name, or username")],
+        trip_date_str: t.Annotated[str, typer.Argument(help="The trip date")],
+        update: t.Annotated[bool, typer.Option(help="Update the trip")] = False,
+        user: t.Annotated[str, typer.Option("-u", envvar=econfig.MTN_WEB_USERNAME, help="Login user name")] = None,
+        password: t.Annotated[str, typer.Option("-p", envvar=econfig.MTN_WEB_PASSWORD, help="Login password")] = None,
+        browser: t.Annotated[bool, typer.Option("-b", help="Show browser window")] = False,
+    ):
     """
     Show status and details of trips on a specific date.
     
@@ -130,78 +136,142 @@ def tripstatus(
     """
     trip_date = util.parse_date(trip_date_str)
 
-    # Neo4j implementation
+
+    # Use business logic layer
     with util.make_neo4j_db() as neo_db:
-        scraper = None
-        mtn_web = None
-        if update:
-            mtn_web = util.make_mtnweb()
-            import neo4j_scrapester
-            scraper = neo4j_scrapester.Neo4jScrapester(mtn_web, neo_db, user, password)
-            scraper.login()
+        logic = mtn_logic.MountaineerLogic(neo_db)
+        target_person, activity_list = logic.trip_status(
+                user,
+                password,
+                person,
+                trip_date,
+                browser,
+                update,
+                progress_callback=print
+        )
         
-        try:
-            # Find target person
-            if profile:
-                target_person = neo_db.person_find_by_url(profile)
-            else:
-                target_person = neo_db.person_find_by_username(user)
+
+        print(f"{target_person.full_name}")
+
+        for activity_info in activity_list:
             
-            if not target_person:
-                print("Error: Person not found")
-                return
+            print(f"  {activity_info.date_start}-{activity_info.date_end} : {activity_info.name:<60} ({activity_info.activity_type})")
+            print(f"    {activity_info.activity_url}")
+            print(f"    {activity_info.branch} - {activity_info.committee}")
+            print(f"    {activity_info.difficulty}, leader: {activity_info.leader_rating}, milage: {activity_info.milage}")
+            print(f"    {activity_info.route_name}   ({activity_info.route_link})")
+            print(f"    {activity_info.status} - {activity_info.result}")
+            print(f"    last scrape: {activity_info.scrapped_at}, next scrape: {activity_info.next_scrape}")
 
-            print(f"{target_person.full_name}")
-            trip_list = neo_db.get_activities_on_date(target_person, trip_date)
+            # TODO: return fully populated activity participation and participants. 
+            # member_table = Table("count", "name", "role", box=TABLE_BOX_STYE)
+            # for i, participation in enumerate(participants):
+            #     member_table.add_row(str(i+1), participation.person.full_name, participation.role)
+            # print(Padding.indent(member_table, 4))
 
-            for an_activity in trip_list:
-                if update and scraper:
-                    print(f"Updating {an_activity.name}")
-                    scraper.activity_update(an_activity)
-                
-                print(f"  {an_activity.date_start}-{an_activity.date_end} : {an_activity.name:<60} ({an_activity.activity_type})")
-                print(f"    {an_activity.activity_url}")
-                print(f"    {an_activity.branch} - {an_activity.committee}")
-                print(f"    {an_activity.difficulty}, leader: {an_activity.leader_rating}, milage: {an_activity.milage}")
-                print(f"    {an_activity.route_name}   ({an_activity.route_link})")
-                print(f"    {an_activity.status} - {an_activity.result}")
-                print(f"    last scrape: {an_activity.scrapped_at}, next scrape: {an_activity.next_scrape}")
-
-                member_table = Table("count", "name", "role", box=TABLE_BOX_STYE)
-                participants = neo_db.get_activity_participants(an_activity)
-                for i, (participant, participation) in enumerate(participants):
-                    member_table.add_row(str(i+1), participant.full_name, participation.role)
-                print(Padding.indent(member_table, 4))
-
-                print("")
-        finally:
-            if scraper:
-                scraper.close()
-            if mtn_web:
-                mtn_web.close()
+            print("")
 
 
 @app.command()
 def scrape(
+    person: t.Annotated[str, typer.Argument(help="Target person's profile url, name, or username")],
     browser: t.Annotated[bool, typer.Option("-b", help="Show browser window")] = False,
     fsf: t.Annotated[bool, typer.Option(help="Force scrape all future activities")] = False,
     user: t.Annotated[str, typer.Option("-u", envvar=econfig.MTN_WEB_USERNAME, help="Login user name")] = None,
     password: t.Annotated[str, typer.Option("-p", envvar=econfig.MTN_WEB_PASSWORD, help="Login password")] = None,
-    profile: t.Annotated[str, typer.Option(help="Target person's profile")] = None,
 ):
+    """Scrape activity data from the mountaineers website."""
     print("scrape")
     
-    # Neo4j implementation
-    with util.make_mtnweb(is_visible=browser) as mtn_web:
-        with util.make_neo4j_db() as neo_db:
-            import neo4j_scrapester
-            scraper = neo4j_scrapester.Neo4jScrapester(mtn_web, neo_db, user, password)
-            scraper.is_scrape_future = fsf
-
-            scraper.login()
-            scraper.scrape_person_activity(profile_url=profile)
+    # Use business logic layer
+    with util.make_neo4j_db() as neo_db:
+        logic = mtn_logic.MountaineerLogic(neo_db)
+        
+        try:
+            result = logic.scrape_person_activities(
+                username=user,
+                password=password,
+                name_url_user=person,
+                is_visible_browser=browser,
+                force_scrape_future=fsf,
+                progress_callback=print
+            )
+        except mtn_logic.MtnException as e:
+            print(f"Error during scraping: {e}")
+            return
+        
+        if result["status"] == "completed":
             print("Done scraping")
+        elif result["status"] == "error":
+            print(f"Error during scraping: {', '.join(result['errors'])}")
 
+
+@app.command()
+def scrapedue(
+    days_past: t.Annotated[int, typer.Option("-d", help="Number of days since person was last scraped")] = 4,
+    browser: t.Annotated[bool, typer.Option("-b", help="Show browser window")] = False,
+    fsf: t.Annotated[bool, typer.Option(help="Force scrape all future activities")] = False,
+):
+    """Show activities that are due for scraping within the next N days."""
+    scrape_cutoff_date = datetime.datetime.now() - datetime.timedelta(days=days_past)
+    
+    # Use business logic layer
+    with util.make_neo4j_db() as neo_db:
+        logic = mtn_logic.MountaineerLogic(neo_db)
+        
+        people_list = logic.persons_due_scrape(scrape_cutoff_date)
+
+        for person in people_list:
+            print(f"{person.full_name} (last scraped: {person.last_scrapped})")
+            try:
+                result = logic.scrape_person_activities(
+                    username=econfig.get(econfig.MTN_WEB_USERNAME),
+                    password=econfig.get(econfig.MTN_WEB_PASSWORD),
+                    name_url_user=person.profile_url,
+                    is_visible_browser=browser,
+                    force_scrape_future=fsf,
+                    progress_callback=lambda s: print (f"{person.full_name}: {s}")
+                )
+            except mtn_logic.MtnException as e:
+                print(f"Error during scraping: {e}")
+                return
+            
+            if result["status"] == "completed":
+                print("Done scraping")
+            elif result["status"] == "error":
+                print(f"Error during scraping: {', '.join(result['errors'])}")
+                
+
+
+@app.command()
+def history(
+    person: t.Annotated[str, typer.Argument(help="Target person's profile url, name, or username")],
+):
+    """Show activity history for a person."""
+    print("history")
+    
+    # Use business logic layer
+    with util.make_neo4j_db() as neo_db:
+        logic = mtn_logic.MountaineerLogic(neo_db)
+        
+        try:
+            activity_part_list = logic.get_person_activity_history(person)
+        except mtn_logic.MtnException as e:
+            print(f"Error: {e}")
+            return
+        
+        print(f"Activity history for {person}:")
+        history_table = Table("#", "Date", "Activity", "Type", "Role", box=TABLE_BOX_STYE)
+        history_table.columns[0].justify = "right"
+        history_table.columns[2].max_width = 65
+        history_table.columns[2].overflow = "ignore"
+        history_table.columns[3].max_width = 30
+        history_table.columns[3].overflow = "ignore"
+        i = 1
+        for activity, participation in activity_part_list:
+            history_table.add_row(str(i), str(activity.date_start), activity.name, activity.activity_type, participation.role)
+            i += 1
+        print(Padding.indent(history_table, 4))
 
 
 if __name__ == "__main__":

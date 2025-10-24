@@ -23,8 +23,20 @@
             "args": [
                 "scrape",
                 /*"-b",*/
-                /*"--profile", "https://www.mountaineers.org/members/will-wade" */
+                "https://www.mountaineers.org/members/will-wade"
                 /* "--profile", "https://www.mountaineers.org/members/colin-farrell" */
+            ]
+        },
+        {
+            "name": "main.py scrapedue",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "scrapedue", 
+                "-d", "1"
             ]
         },
         {
@@ -35,35 +47,32 @@
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "args": [
-                "-C", "local-config.txt",
-                "whowith", "2025-04-05"
+                "whowith", "tkunger", "2025-10-19"
             ]
         },
         {
-            "name": "maint.py whowith",
+            "name": "main.py diddo",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/maint.py",
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            "args": [
-                "whowith", 
-                "-C", "local-config.txt", 
-                "2025-04-05"
-            ]
-        },
-        {
-            "name": "maint.py diddo",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/src/maint.py",
+            "program": "${workspaceFolder}/src/main.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "args": [
                 "diddo", 
-                "-C", "local-config.txt", 
-                "--profile", "https://www.mountaineers.org/members/colin-farrell",
-                "Deception"
+                "--person", "alan marshall",
+                "Flattery", 
+            ]
+        },
+        {
+            "name": "main.py history",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "history", 
+                "michelle farrel", 
             ]
         },
         {
@@ -74,8 +83,7 @@
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "args": [
-                "-C", "local-config.txt",
-                "tripstatus", "2025-04-06", "--update"
+                "tripstatus", "tom unger", "2025-04-06", "--update", "-b"
             ]
         },
         {

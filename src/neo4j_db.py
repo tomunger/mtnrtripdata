@@ -8,6 +8,7 @@ from neo4j import GraphDatabase, Driver, Session
 import econfig
 
 
+
 @dataclass
 class Person:
     """A person who joins activities - Neo4j node representation."""
@@ -27,18 +28,18 @@ class Person:
     def to_dict(self) -> dict:
         """Convert to dictionary for Neo4j properties, excluding None values and internal fields."""
         data = {k: v for k, v in asdict(self).items() 
-                if not k.startswith('_') and v is not None}
+                if not k.startswith('_')}
         # Convert datetime to string for Neo4j storage
-        if 'last_scrapped' in data and data['last_scrapped']:
-            data['last_scrapped'] = data['last_scrapped'].isoformat()
+        if 'last_scrapped' in data:
+            data['last_scrapped'] = data['last_scrapped'].isoformat() if data['last_scrapped'] else ""
         return data
 
     @classmethod
     def from_dict(cls, data: dict) -> 'Person':
         """Create Person from Neo4j node properties."""
         # Convert datetime string back to datetime object
-        if 'last_scrapped' in data and data['last_scrapped']:
-            data['last_scrapped'] = datetime.datetime.fromisoformat(data['last_scrapped'])
+        if 'last_scrapped' in data:
+            data['last_scrapped'] = datetime.datetime.fromisoformat(data['last_scrapped']) if data['last_scrapped'] else None
         # Extract Neo4j ID if present
         neo4j_id = data.pop('_neo4j_id', None)
         person = cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
@@ -75,14 +76,16 @@ class Activity:
     def to_dict(self) -> dict:
         """Convert to dictionary for Neo4j properties, excluding None values and internal fields."""
         data = {k: v for k, v in asdict(self).items() 
-                if not k.startswith('_') and v is not None}
+                if not k.startswith('_')}
         # Convert datetime/date objects to strings for Neo4j storage
         for key in ['date_start', 'date_end']:
-            if key in data and data[key]:
-                data[key] = data[key].isoformat()
+            if key in data:
+                # Store none as empty string.
+                data[key] = data[key].isoformat() if data[key] else ""
         for key in ['scrapped_at', 'next_scrape', 'scrape_error_time']:
-            if key in data and data[key]:
-                data[key] = data[key].isoformat()
+            if key in data:
+                # Store None as empty string.
+                data[key] = data[key].isoformat() if data[key] else ""
         return data
 
     @classmethod
@@ -90,11 +93,12 @@ class Activity:
         """Create Activity from Neo4j node properties."""
         # Convert date strings back to date/datetime objects
         for key in ['date_start', 'date_end']:
-            if key in data and data[key]:
-                data[key] = datetime.date.fromisoformat(data[key])
+            if key in data:
+                data[key] = datetime.date.fromisoformat(data[key]) if data[key] else None
         for key in ['scrapped_at', 'next_scrape', 'scrape_error_time']:
-            if key in data and data[key]:
-                data[key] = datetime.datetime.fromisoformat(data[key])
+            if key in data:
+                # Convert to datetime.  Empty string becomes None.
+                data[key] = datetime.datetime.fromisoformat(data[key]) if data[key] else None
         # Extract Neo4j ID if present
         neo4j_id = data.pop('_neo4j_id', None)
         activity = cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
@@ -109,20 +113,29 @@ class Participation:
     is_canceled: bool = False
     registration: str = ""
     member_result: str = ""
+    person: Person | None = None
+    activity: Activity | None = None
     
     def to_dict(self) -> dict:
         """Convert to dictionary for Neo4j relationship properties."""
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> 'Participation':
+    def from_dict(cls, 
+                  data: dict, 
+                  person: Person | None = None,
+                  activity: Activity | None = None
+        ) -> 'Participation':
         """Create Participation from Neo4j relationship properties."""
-        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+        part = cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+        part.person = person
+        part.activity = activity
+        return part
 
 
 class Neo4jDB:
     """Neo4j database interface for mountaineer trip data."""
-    
+
     def __init__(self, driver: Driver = None):
         if driver is None:
             uri = econfig.get(econfig.NEO4J_URL)
@@ -134,20 +147,25 @@ class Neo4jDB:
         else:
             self.driver = driver
 
+
     def __enter__(self):
         return self
-    
+
+
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
         return False
-    
+
+
     def close(self):
         if self.driver:
             self.driver.close()
 
+
     def session(self) -> Session:
         """Create a new Neo4j session."""
         return self.driver.session()
+
 
     def create_constraints(self):
         """Create Neo4j constraints and indexes for better performance."""
@@ -161,6 +179,7 @@ class Neo4jDB:
             session.run("CREATE INDEX person_fullname IF NOT EXISTS FOR (p:Person) ON (p.full_name)")
             session.run("CREATE INDEX activity_dates IF NOT EXISTS FOR (a:Activity) ON (a.date_start, a.date_end)")
 
+
     # Person operations
     def person_create(self, person: Person) -> Person:
         """Create a new Person node."""
@@ -173,7 +192,8 @@ class Neo4jDB:
             person._neo4j_id = record["node_id"]
             return person
 
-    def person_find_by_url(self, profile_url: str) -> Person | None:
+
+    def person_by_url(self, profile_url: str) -> Person | None:
         """Find person by profile URL."""
         with self.session() as session:
             result = session.run(
@@ -187,7 +207,28 @@ class Neo4jDB:
                 return Person.from_dict(data)
             return None
 
-    def person_find_by_username(self, username: str) -> Person | None:
+
+
+    def persons_by_name(self, full_name: str) -> list[Person]:
+        """Find persons by full name (case-insensitive, partial match)."""
+        persons = []
+        with self.session() as session:
+            result = session.run(
+                """
+                MATCH (p:Person)
+                WHERE toLower(p.full_name) CONTAINS toLower($name)
+                RETURN p, elementId(p) as person_id
+                """,
+                name=full_name
+            )
+            for record in result:
+                person_data = dict(record["p"])
+                person_data["_neo4j_id"] = record["person_id"]
+                persons.append(Person.from_dict(person_data))
+        return persons
+
+
+    def person_by_username(self, username: str) -> Person | None:
         """Find person by username."""
         with self.session() as session:
             result = session.run(
@@ -200,6 +241,28 @@ class Neo4jDB:
                 data["_neo4j_id"] = record["node_id"]
                 return Person.from_dict(data)
             return None
+
+
+    def persons_due_scrape(self, cutoff_date: datetime.date) -> list[Person]:
+        """Get list of people due for scraping based on cutoff date."""
+        persons = []
+        cutoff_str = cutoff_date.isoformat()
+        with self.session() as session:
+            result = session.run(
+                """
+                MATCH (p:Person)
+                WHERE p.is_scrapped and p.last_scrapped <= $cutoff
+                RETURN p, elementId(p) as person_id
+                """,
+                cutoff=cutoff_str
+            )
+            for record in result:
+                person_data = dict(record["p"])
+                person_data["_neo4j_id"] = record["person_id"]
+                persons.append(Person.from_dict(person_data))
+        return persons
+
+
 
     def person_update(self, person: Person) -> Person:
         """Update an existing Person node."""
@@ -214,6 +277,7 @@ class Neo4jDB:
             )
             return person
 
+
     # Activity operations
     def activity_create(self, activity: Activity) -> Activity:
         """Create a new Activity node."""
@@ -225,20 +289,7 @@ class Neo4jDB:
             record = result.single()
             activity._neo4j_id = record["node_id"]
             return activity
-
-    def activity_find_by_url(self, activity_url: str) -> Activity | None:
-        """Find activity by URL."""
-        with self.session() as session:
-            result = session.run(
-                "MATCH (a:Activity {activity_url: $url}) RETURN a, elementId(a) as node_id",
-                url=activity_url
-            )
-            record = result.single()
-            if record:
-                data = dict(record["a"])
-                data["_neo4j_id"] = record["node_id"]
-                return Activity.from_dict(data)
-            return None
+    
 
     def activity_update(self, activity: Activity) -> Activity:
         """Update an existing Activity node."""
@@ -253,127 +304,64 @@ class Neo4jDB:
             )
             return activity
 
-    # Participation relationship operations
-    def create_participation(self, person: Person, activity: Activity, participation: Participation):
-        """Create a PARTICIPATE relationship between Person and Activity."""
-        if person._neo4j_id is None or activity._neo4j_id is None:
-            raise ValueError("Both person and activity must have Neo4j IDs")
-        
-        with self.session() as session:
-            session.run(
-                """
-                MATCH (p:Person), (a:Activity) 
-                WHERE elementId(p) = $person_id AND elementId(a) = $activity_id
-                CREATE (p)-[:PARTICIPATE $props]->(a)
-                """,
-                person_id=person._neo4j_id,
-                activity_id=activity._neo4j_id,
-                props=participation.to_dict()
-            )
 
-    def find_participation(self, person: Person, activity: Activity) -> Participation | None:
-        """Find existing participation relationship."""
-        if person._neo4j_id is None or activity._neo4j_id is None:
-            return None
-        
+    def activity_by_url(self, activity_url: str) -> Activity | None:
+        """Find activity by URL."""
         with self.session() as session:
             result = session.run(
-                """
-                MATCH (p:Person)-[r:PARTICIPATE]->(a:Activity)
-                WHERE elementId(p) = $person_id AND elementId(a) = $activity_id
-                RETURN r
-                """,
-                person_id=person._neo4j_id,
-                activity_id=activity._neo4j_id
+                "MATCH (a:Activity {activity_url: $url}) RETURN a, elementId(a) as node_id",
+                url=activity_url
             )
             record = result.single()
             if record:
-                return Participation.from_dict(dict(record["r"]))
+                data = dict(record["a"])
+                data["_neo4j_id"] = record["node_id"]
+                return Activity.from_dict(data)
             return None
 
-    def update_participation(self, person: Person, activity: Activity, participation: Participation):
-        """Update an existing PARTICIPATE relationship."""
-        if person._neo4j_id is None or activity._neo4j_id is None:
-            raise ValueError("Both person and activity must have Neo4j IDs")
-        
-        with self.session() as session:
-            session.run(
-                """
-                MATCH (p:Person)-[r:PARTICIPATE]->(a:Activity)
-                WHERE elementId(p) = $person_id AND elementId(a) = $activity_id
-                SET r += $props
-                """,
-                person_id=person._neo4j_id,
-                activity_id=activity._neo4j_id,
-                props=participation.to_dict()
-            )
 
-    def remove_participation(self, person: Person, activity: Activity):
-        """Remove a PARTICIPATE relationship."""
-        if person._neo4j_id is None or activity._neo4j_id is None:
-            return
+    def activities_by_date_and_phrase(
+        self,
+        target_date: datetime.date,
+        phrase: str
+    ) -> list[Activity]:
+        """
+        Find activities on a specific date that match a phrase in the name.
+        
+        Args:
+            target_date: The date to search for activities
+            phrase: Phrase to search for in activity names (case-insensitive)
+            
+        Returns:
+            List of Activity objects matching the criteria
+        """
+        phrase_lower = phrase.lower()
+        matching_activities = []
         
         with self.session() as session:
-            session.run(
-                """
-                MATCH (p:Person)-[r:PARTICIPATE]->(a:Activity)
-                WHERE elementId(p) = $person_id AND elementId(a) = $activity_id
-                DELETE r
-                """,
-                person_id=person._neo4j_id,
-                activity_id=activity._neo4j_id
-            )
-
-    # Query operations that replace SQLAlchemy join logic
-    def get_person_activities(self, person: Person) -> list[tuple[Activity, Participation]]:
-        """Get all activities for a person with their participation details."""
-        if person._neo4j_id is None:
-            return []
-        
-        with self.session() as session:
+            # Cypher query to find activities on a specific date with phrase in name
             result = session.run(
                 """
-                MATCH (p:Person)-[r:PARTICIPATE]->(a:Activity)
-                WHERE elementId(p) = $person_id
-                RETURN a, r, elementId(a) as activity_id
-                ORDER BY a.date_start
+                MATCH (a:Activity)
+                WHERE a.date_start <= $date AND a.date_end >= $date
+                AND toLower(a.name) CONTAINS $phrase
+                RETURN a, elementId(a) as activity_id
+                ORDER BY a.date_start, a.name
                 """,
-                person_id=person._neo4j_id
+                date=target_date.isoformat(),
+                phrase=phrase_lower
             )
-            activities = []
+            
             for record in result:
                 activity_data = dict(record["a"])
                 activity_data["_neo4j_id"] = record["activity_id"]
                 activity = Activity.from_dict(activity_data)
-                participation = Participation.from_dict(dict(record["r"]))
-                activities.append((activity, participation))
-            return activities
-
-    def get_activity_participants(self, activity: Activity) -> list[tuple[Person, Participation]]:
-        """Get all participants for an activity with their participation details."""
-        if activity._neo4j_id is None:
-            return []
+                matching_activities.append(activity)
         
-        with self.session() as session:
-            result = session.run(
-                """
-                MATCH (p:Person)-[r:PARTICIPATE]->(a:Activity)
-                WHERE elementId(a) = $activity_id
-                RETURN p, r, elementId(p) as person_id
-                ORDER BY p.full_name
-                """,
-                activity_id=activity._neo4j_id
-            )
-            participants = []
-            for record in result:
-                person_data = dict(record["p"])
-                person_data["_neo4j_id"] = record["person_id"]
-                person = Person.from_dict(person_data)
-                participation = Participation.from_dict(dict(record["r"]))
-                participants.append((person, participation))
-            return participants
+        return matching_activities
 
-    def get_activities_on_date(self, person: Person, target_date: datetime.date) -> list[Activity]:
+
+    def activities_on_person_date(self, person: Person, target_date: datetime.date) -> list[Activity]:
         """Get all activities for a person on a specific date."""
         if person._neo4j_id is None:
             return []
@@ -397,6 +385,138 @@ class Neo4jDB:
                 activity_data["_neo4j_id"] = record["activity_id"]
                 activities.append(Activity.from_dict(activity_data))
             return activities
+
+
+
+    # Participation relationship operations
+    def participation_create(self, person: Person, activity: Activity, participation: Participation):
+        """Create a PARTICIPATE relationship between Person and Activity."""
+        if person._neo4j_id is None or activity._neo4j_id is None:
+            raise ValueError("Both person and activity must have Neo4j IDs")
+        
+        with self.session() as session:
+            session.run(
+                """
+                MATCH (p:Person), (a:Activity) 
+                WHERE elementId(p) = $person_id AND elementId(a) = $activity_id
+                CREATE (p)-[:PARTICIPATE $props]->(a)
+                """,
+                person_id=person._neo4j_id,
+                activity_id=activity._neo4j_id,
+                props=participation.to_dict()
+            )
+
+
+    def participation_update(self, person: Person, activity: Activity, participation: Participation):
+        """Update an existing PARTICIPATE relationship."""
+        if person._neo4j_id is None or activity._neo4j_id is None:
+            raise ValueError("Both person and activity must have Neo4j IDs")
+        
+        with self.session() as session:
+            session.run(
+                """
+                MATCH (p:Person)-[r:PARTICIPATE]->(a:Activity)
+                WHERE elementId(p) = $person_id AND elementId(a) = $activity_id
+                SET r += $props
+                """,
+                person_id=person._neo4j_id,
+                activity_id=activity._neo4j_id,
+                props=participation.to_dict()
+            )
+
+    def participation_find(self, person: Person, activity: Activity) -> Participation | None:
+        """Find existing participation relationship."""
+        if person._neo4j_id is None or activity._neo4j_id is None:
+            return None
+        
+        with self.session() as session:
+            result = session.run(
+                """
+                MATCH (p:Person)-[r:PARTICIPATE]->(a:Activity)
+                WHERE elementId(p) = $person_id AND elementId(a) = $activity_id
+                RETURN r
+                """,
+                person_id=person._neo4j_id,
+                activity_id=activity._neo4j_id
+            )
+            record = result.single()
+            if record:
+                return Participation.from_dict(dict(record["r"]), person = person, activity=activity)
+            return None
+
+
+    def participation_remove(self, person: Person, activity: Activity):
+        """Remove a PARTICIPATE relationship."""
+        if person._neo4j_id is None or activity._neo4j_id is None:
+            return
+        
+        with self.session() as session:
+            session.run(
+                """
+                MATCH (p:Person)-[r:PARTICIPATE]->(a:Activity)
+                WHERE elementId(p) = $person_id AND elementId(a) = $activity_id
+                DELETE r
+                """,
+                person_id=person._neo4j_id,
+                activity_id=activity._neo4j_id
+            )
+
+
+    def activity_part_by_person(self, person: Person) -> list[tuple[Activity, Participation]]:
+        """Get all activities and participation for a person.
+        
+        Args:
+            person: Person object
+
+        Returns:
+            List of tuples (Activity, Participation)
+        """
+        if person._neo4j_id is None:
+            return []
+        
+        with self.session() as session:
+            result = session.run(
+                """
+                MATCH (p:Person)-[r:PARTICIPATE]->(a:Activity)
+                WHERE elementId(p) = $person_id
+                RETURN a, r, elementId(a) as activity_id
+                ORDER BY a.date_start
+                """,
+                person_id=person._neo4j_id
+            )
+            activities = []
+            for record in result:
+                activity_data = dict(record["a"])
+                activity_data["_neo4j_id"] = record["activity_id"]
+                activity = Activity.from_dict(activity_data)
+                participation = Participation.from_dict(dict(record["r"]), person=person, activity=activity)
+                activities.append((activity, participation))
+            return activities
+
+
+    def person_part_by_activity(self, activity: Activity) -> list[tuple[Person, Participation]]:
+        """Get all persons and their participation for an activity."""
+        if activity._neo4j_id is None:
+            return []
+        
+        with self.session() as session:
+            result = session.run(
+                """
+                MATCH (p:Person)-[r:PARTICIPATE]->(a:Activity)
+                WHERE elementId(a) = $activity_id
+                RETURN p, r, elementId(p) as person_id
+                ORDER BY p.full_name
+                """,
+                activity_id=activity._neo4j_id
+            )
+            participants = []
+            for record in result:
+                person_data = dict(record["p"])
+                person_data["_neo4j_id"] = record["person_id"]
+                person = Person.from_dict(person_data)
+                participation = Participation.from_dict(dict(record["r"]), activity=activity, person=person)
+                participants.append((person, participation))
+            return participants
 
     def get_people_on_activities(self, activities: list[Activity]) -> dict[str, Person]:
         """Get all people who participated in any of the given activities."""
@@ -423,6 +543,7 @@ class Neo4jDB:
                 person = Person.from_dict(person_data)
                 people[person.profile_url] = person
             return people
+
 
     def get_shared_activities(self, person1: Person, person2: Person) -> list[Activity]:
         """Get all activities that two people both participated in."""
