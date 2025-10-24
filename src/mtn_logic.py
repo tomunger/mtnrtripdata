@@ -27,8 +27,10 @@ class PersonInfo:
     user_name: str
     email: str
     branch: str
-    is_scrapped: bool
-    last_scrapped: datetime.datetime | None
+    prof_is_scrapped: bool
+    prof_last_scrapped: datetime.datetime | None
+    act_is_scrapped: bool
+    act_last_scrapped: datetime.datetime | None
 
 
 @dataclass
@@ -88,8 +90,10 @@ def _person_to_info(person: neo4j_db.Person | None) -> PersonInfo | None:
         portrait_url=person.portrait_url,
         email=person.email,
         branch=person.branch,
-        is_scrapped=person.is_scrapped,
-        last_scrapped=person.last_scrapped
+        prof_is_scrapped=person.prof_is_scrapped,
+        prof_last_scrapped=person.prof_last_scrapped,
+        act_is_scrapped=person.act_is_scrapped,
+        act_last_scrapped=person.act_last_scrapped
     )
 
 
@@ -149,9 +153,9 @@ class MountaineerLogic:
         return _person_to_info(person) if person else None
 
 
-    def persons_due_scrape(self, cutoff_date: datetime.date) -> list[PersonInfo]:
+    def persons_act_due_scrape(self, cutoff_date: datetime.date) -> list[PersonInfo]:
         """Get list of people due for scraping based on cutoff date."""
-        persons = self.neo_db.persons_due_scrape(cutoff_date)
+        persons = self.neo_db.persons_act_due_scrape(cutoff_date)
         return [_person_to_info(p) for p in persons]   
 
     def get_activities_on_date(self, person_info: PersonInfo, target_date: datetime.date) -> list[ActivityInfo]:

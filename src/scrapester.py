@@ -59,8 +59,8 @@ class Neo4jScrapester():
         self.mtn_web.login(self.username, self.password)
 
         is_scrape = self.mtn_person is None \
-                        or self.mtn_person.last_scrapped is None \
-                            or self.mtn_person.last_scrapped < datetime.datetime.now() - PROFILE_SCRAPE_INTERVAL
+                        or self.mtn_person.prof_last_scrapped is None \
+                            or self.mtn_person.prof_last_scrapped < datetime.datetime.now() - PROFILE_SCRAPE_INTERVAL
         if is_scrape:
             self._scrape_login_profile()
 
@@ -83,14 +83,14 @@ class Neo4jScrapester():
             portrait_url=scraped_user.portrait_url,
             email=scraped_user.email,
             branch=scraped_user.branch,
-            is_scrapped=True,
-            last_scrapped=datetime.datetime.now()
+            prof_is_scrapped=True,
+            prof_last_scrapped=datetime.datetime.now()
         )
         return self.neo_db.person_create(mtn_user)
 
     def _user_update(self, mtn_user: neo4j_db.Person, scraped_user: mtnweb.ScrapedUser, username: str = "", password: str = "") -> neo4j_db.Person:
-        mtn_user.is_scrapped = True
-        mtn_user.last_scrapped = datetime.datetime.now()
+        mtn_user.prof_is_scrapped = True
+        mtn_user.prof_last_scrapped = datetime.datetime.now()
         mtn_user.profile_url = scraped_user.profile_url
         if username:
             mtn_user.user_name = username
@@ -106,8 +106,8 @@ class Neo4jScrapester():
         target_user = self.neo_db.person_by_url(profile_url)
 
         is_scrape = target_user is None \
-                        or target_user.last_scrapped is None \
-                            or target_user.last_scrapped < datetime.datetime.now() - PROFILE_SCRAPE_INTERVAL
+                        or target_user.prof_last_scrapped is None \
+                            or target_user.prof_last_scrapped < datetime.datetime.now() - PROFILE_SCRAPE_INTERVAL
         if is_scrape:
             scraped_user = self.mtn_web.navigate_to_profile(profile_url)
             if target_user is None:
@@ -172,8 +172,8 @@ class Neo4jScrapester():
                 portrait_url="",
                 email="",
                 branch="",
-                is_scrapped=False,
-                last_scrapped=None
+                prof_is_scrapped=False,
+                prof_last_scrapped=None
             )
             mtn_member_person = self.neo_db.person_create(mtn_member_person)
         return mtn_member_person
@@ -405,3 +405,7 @@ class Neo4jScrapester():
                         if e.__context__:
                             self.progress_callback(f"    cause: {type(e.__context__)} : {e.args}") 
                         raise
+
+        target_person.act_is_scrapped = True
+        target_person.act_last_scrapped = datetime.datetime.now()
+        self.neo_db.person_update(target_person)

@@ -19,8 +19,10 @@ class Person:
     portrait_url: str = ""
     email: str = ""
     branch: str = ""
-    is_scrapped: bool = False
-    last_scrapped: datetime.datetime | None = None
+    prof_is_scrapped: bool = False
+    prof_last_scrapped: datetime.datetime | None = None
+    act_is_scrapped: bool = False
+    act_last_scrapped: datetime.datetime | None = None
     
     # Neo4j internal ID (populated when loaded from database)
     _neo4j_id: int | None = field(default=None, repr=False)
@@ -30,16 +32,18 @@ class Person:
         data = {k: v for k, v in asdict(self).items() 
                 if not k.startswith('_')}
         # Convert datetime to string for Neo4j storage
-        if 'last_scrapped' in data:
-            data['last_scrapped'] = data['last_scrapped'].isoformat() if data['last_scrapped'] else ""
+        for key in ['prof_last_scrapped', 'act_last_scrapped']:
+            if key in data:
+                data[key] = data[key].isoformat() if data[key] else ""
         return data
 
     @classmethod
     def from_dict(cls, data: dict) -> 'Person':
         """Create Person from Neo4j node properties."""
         # Convert datetime string back to datetime object
-        if 'last_scrapped' in data:
-            data['last_scrapped'] = datetime.datetime.fromisoformat(data['last_scrapped']) if data['last_scrapped'] else None
+        for key in ['prof_last_scrapped', 'act_last_scrapped']:
+            if key in data:
+                data[key] = datetime.datetime.fromisoformat(data[key]) if data[key] else None
         # Extract Neo4j ID if present
         neo4j_id = data.pop('_neo4j_id', None)
         person = cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
@@ -243,15 +247,22 @@ class Neo4jDB:
             return None
 
 
-    def persons_due_scrape(self, cutoff_date: datetime.date) -> list[Person]:
-        """Get list of people due for scraping based on cutoff date."""
+    def persons_act_due_scrape(self, cutoff_date: datetime.date) -> list[Person]:
+        """Get list of people due to have their activities scrapped.
+        Args:
+            cutoff_date: Scrape all persons whose act_last_scrapped is on or before this date.
+
+        Returns:
+            list of Person objects due for activity scraping.
+
+        """
         persons = []
         cutoff_str = cutoff_date.isoformat()
         with self.session() as session:
             result = session.run(
                 """
                 MATCH (p:Person)
-                WHERE p.is_scrapped and p.last_scrapped <= $cutoff
+                WHERE p.act_is_scrapped and p.act_last_scrapped <= $cutoff
                 RETURN p, elementId(p) as person_id
                 """,
                 cutoff=cutoff_str

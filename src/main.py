@@ -208,7 +208,7 @@ def scrape(
 
 @app.command()
 def scrapedue(
-    days_past: t.Annotated[int, typer.Option("-d", help="Number of days since person was last scraped")] = 4,
+    days_past: t.Annotated[float, typer.Option("-d", help="Number of days since person was last scraped.  A float, may include fractional days: 3.5")] = 4,
     browser: t.Annotated[bool, typer.Option("-b", help="Show browser window")] = False,
     fsf: t.Annotated[bool, typer.Option(help="Force scrape all future activities")] = False,
 ):
@@ -219,10 +219,10 @@ def scrapedue(
     with util.make_neo4j_db() as neo_db:
         logic = mtn_logic.MountaineerLogic(neo_db)
         
-        people_list = logic.persons_due_scrape(scrape_cutoff_date)
+        people_list = logic.persons_act_due_scrape(scrape_cutoff_date)
 
         for person in people_list:
-            print(f"{person.full_name} (last scraped: {person.last_scrapped})")
+            print(f"{person.full_name} (last scraped: {person.prof_last_scrapped})")
             try:
                 result = logic.scrape_person_activities(
                     username=econfig.get(econfig.MTN_WEB_USERNAME),

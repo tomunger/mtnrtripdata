@@ -1,0 +1,10 @@
+the object Person and PersonInfo have fields is_scrapped and last_scrapped.  These need to be refactored in the following way:
+
+1. rename is_scrapped to prof_is_scrapped
+2. rename last_scrapped to prof_last_scrapped
+3. add new field act_is_scrapped as boolean
+4. add new field act_last_scrapped as datetime.datetime
+
+since act_last_scrapped is a datetime, it will need the datetime conversions to and from the database.
+
+Also, write scripts that will update the database, renaming the existing fields.  For the new fields, set act_is_scrapped to prof_is_scrapped and act_last_scrapped to prof_last_scrapped for each Person node in the database. 

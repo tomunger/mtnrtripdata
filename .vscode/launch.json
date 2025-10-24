@@ -36,7 +36,7 @@
             "console": "integratedTerminal",
             "args": [
                 "scrapedue", 
-                "-d", "1"
+                "-d", "10"
             ]
         },
         {
