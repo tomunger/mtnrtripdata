@@ -7,7 +7,7 @@ import typing as t
 from dataclasses import dataclass
 
 import neo4j_db
-import neo4j_scrapester
+import scrapester
 import util
 
 
@@ -368,7 +368,7 @@ class MountaineerLogic:
 
         if is_update:
             with util.make_mtnweb(is_visible_browser) as mtn_web:
-                scraper = neo4j_scrapester.Neo4jScrapester(
+                scraper = scrapester.Neo4jScrapester(
                     mtn_web,
                     self.neo_db,
                     username,
@@ -420,7 +420,7 @@ class MountaineerLogic:
         
         try:
             with util.make_mtnweb(is_visible=is_visible_browser) as mtn_web:
-                scraper = neo4j_scrapester.Neo4jScrapester(
+                scraper = scrapester.Neo4jScrapester(
                     mtn_web, 
                     self.neo_db, 
                     username, 
@@ -474,7 +474,7 @@ class MountaineerLogic:
                 return results
             
             with util.make_mtnweb() as mtn_web:
-                scraper = neo4j_scrapester.Neo4jScrapester(
+                scraper = scrapester.Neo4jScrapester(
                     mtn_web,
                     self.neo_db,
                     username,

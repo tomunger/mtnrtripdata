@@ -1,7 +1,6 @@
 '''
 This module contains logic to scrape the mountaineers web site using mtnweb
 and write to the Neo4j database using neo4j_db.py.
-Neo4j version of scrapester.py - replaces SQLAlchemy with graph database.
 '''
 import datetime
 import time
