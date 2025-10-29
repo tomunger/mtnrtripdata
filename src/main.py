@@ -74,6 +74,59 @@ def whowith(
 
 
 @app.command()
+def whowho(
+    person1: t.Annotated[str, typer.Argument(help="First person's name, profile url, or user name")],
+    person2: t.Annotated[str, typer.Argument(help="Second person's name, profile url, or user name")]
+):
+    """
+    Find what activities two people did together.
+
+    Shows all activities that both [bold yellow]person1[/bold yellow] and [bold yellow]person2[/bold yellow] 
+    participated in, along with whether each person's activities have been scraped.
+    """
+    
+    # Use business logic layer
+    with util.make_neo4j_db() as neo_db:
+        logic = mtn_logic.MountaineerLogic(neo_db)
+
+        try:
+            result = logic.who_who(person1, person2)
+        except mtn_logic.MtnException as e:
+            print(f"Error: {e}")
+            return
+        
+        # Display both people with their scrape status
+        print(f"\n[bold]{result.person1.full_name}[/bold]")
+        print(f"  Activities scraped: {'Y' if result.person1.act_is_scrapped else 'n'}")
+        if result.person1.act_last_scrapped:
+            print(f"  Last scraped: {result.person1.act_last_scrapped.strftime('%Y-%m-%d %H:%M')}")
+        
+        print(f"\n[bold]{result.person2.full_name}[/bold]")
+        print(f"  Activities scraped: {'Y' if result.person2.act_is_scrapped else 'n'}")
+        if result.person2.act_last_scrapped:
+            print(f"  Last scraped: {result.person2.act_last_scrapped.strftime('%Y-%m-%d %H:%M')}")
+        
+        # Display shared activities
+        print(f"\n[bold]Shared Activities ({len(result.shared_activities)}):[/bold]")
+        
+        if result.shared_activities:
+            activity_table = Table("Date", "Activity", "Type", box=TABLE_BOX_STYE)
+            
+            for activity in result.shared_activities:
+                activity_table.add_row(
+                    str(activity.date_start), 
+                    activity.name, 
+                    activity.activity_type
+                )
+            
+            print(Padding.indent(activity_table, 2))
+        else:
+            print("  No shared activities found")
+        
+        print("")
+
+
+@app.command()
 def diddo(
         person: t.Annotated[str, typer.Argument(help="Target person's profile url, name, or username")],
         trip_phrase: t.Annotated[str, typer.Argument(help="The phrase to search for in activity titles")],
@@ -211,6 +264,7 @@ def scrapedue(
     days_past: t.Annotated[float, typer.Option("-d", help="Number of days since person was last scraped.  A float, may include fractional days: 3.5")] = 4,
     browser: t.Annotated[bool, typer.Option("-b", help="Show browser window")] = False,
     fsf: t.Annotated[bool, typer.Option(help="Force scrape all future activities")] = False,
+    limit: t.Annotated[int, typer.Option(help="Limit the number scraped")] = 0,
 ):
     """Show activities that are due for scraping within the next N days."""
     scrape_cutoff_date = datetime.datetime.now() - datetime.timedelta(days=days_past)
@@ -219,7 +273,7 @@ def scrapedue(
     with util.make_neo4j_db() as neo_db:
         logic = mtn_logic.MountaineerLogic(neo_db)
         
-        people_list = logic.persons_act_due_scrape(scrape_cutoff_date)
+        people_list = logic.persons_act_due_scrape(scrape_cutoff_date, limit=limit)
 
         for person in people_list:
             print(f"{person.full_name} (last scraped: {person.prof_last_scrapped})")

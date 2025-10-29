@@ -247,7 +247,7 @@ class Neo4jDB:
             return None
 
 
-    def persons_act_due_scrape(self, cutoff_date: datetime.date) -> list[Person]:
+    def persons_act_due_scrape(self, cutoff_date: datetime.date, limit: int = 0) -> list[Person]:
         """Get list of people due to have their activities scrapped.
         Args:
             cutoff_date: Scrape all persons whose act_last_scrapped is on or before this date.
@@ -259,18 +259,22 @@ class Neo4jDB:
         persons = []
         cutoff_str = cutoff_date.isoformat()
         with self.session() as session:
-            result = session.run(
-                """
-                MATCH (p:Person)
-                WHERE p.act_is_scrapped and p.act_last_scrapped <= $cutoff
-                RETURN p, elementId(p) as person_id
-                """,
-                cutoff=cutoff_str
-            )
-            for record in result:
-                person_data = dict(record["p"])
-                person_data["_neo4j_id"] = record["person_id"]
-                persons.append(Person.from_dict(person_data))
+            query = """
+            MATCH (p:Person)
+            WHERE p.act_is_scrapped and p.act_last_scrapped <= $cutoff
+            RETURN p, elementId(p) as person_id
+            ORDER BY p.act_last_scrapped ASC
+            """
+            if limit > 0:
+                query += " LIMIT $limit"
+                result = session.run(query, cutoff=cutoff_str, limit=limit)
+            else:
+                result = session.run(query, cutoff=cutoff_str)
+            
+        for record in result:
+            person_data = dict(record["p"])
+            person_data["_neo4j_id"] = record["person_id"]
+            persons.append(Person.from_dict(person_data))
         return persons
 
 

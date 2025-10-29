@@ -8,3 +8,10 @@ the object Person and PersonInfo have fields is_scrapped and last_scrapped.  The
 since act_last_scrapped is a datetime, it will need the datetime conversions to and from the database.
 
 Also, write scripts that will update the database, renaming the existing fields.  For the new fields, set act_is_scrapped to prof_is_scrapped and act_last_scrapped to prof_last_scrapped for each Person node in the database. 
+
+
+
+
+Code a new command, 'whowho'.  This takes two parameters, person1 and person2.  Both identify people.  Find both people in the database.  
+Then find what activities the two did together.  Follow the pattern for the command whowith.  The output should be similar.  The output should indicate if each person 
+has had their mountaineer activities scraped (field act_is_scrapped)

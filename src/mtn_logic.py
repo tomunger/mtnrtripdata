@@ -79,6 +79,14 @@ class ActivityWithInfo:
     shared: list[PersonActivityListInfo]
 
 
+@dataclass
+class TwoPersonActivityInfo:
+    """Information about activities shared between two specific people."""
+    person1: PersonInfo
+    person2: PersonInfo
+    shared_activities: list[ActivityInfo]
+
+
 def _person_to_info(person: neo4j_db.Person | None) -> PersonInfo | None:
     """Convert Neo4j Person to PersonInfo."""
     if not person:
@@ -153,9 +161,10 @@ class MountaineerLogic:
         return _person_to_info(person) if person else None
 
 
-    def persons_act_due_scrape(self, cutoff_date: datetime.date) -> list[PersonInfo]:
+    def persons_act_due_scrape(self, cutoff_date: datetime.date, limit: int = 0) -> list[PersonInfo]:
         """Get list of people due for scraping based on cutoff date."""
-        persons = self.neo_db.persons_act_due_scrape(cutoff_date)
+        persons = self.neo_db.persons_act_due_scrape(cutoff_date, limit=limit)
+
         return [_person_to_info(p) for p in persons]   
 
     def get_activities_on_date(self, person_info: PersonInfo, target_date: datetime.date) -> list[ActivityInfo]:
@@ -301,6 +310,39 @@ class MountaineerLogic:
             awi.shared.append(PersonActivityListInfo(co_participant,activites=shared_activities))
         
         return awi
+
+
+    def who_who(
+        self,
+        url_name_user1: str,
+        url_name_user2: str
+    ) -> TwoPersonActivityInfo:
+        """
+        Find what activities two people did together.
+        
+        Args:
+            url_name_user1: First person's profile URL, full name, or username
+            url_name_user2: Second person's profile URL, full name, or username
+            
+        Returns:
+            TwoPersonActivityInfo containing both people and their shared activities
+            
+        Raises:
+            MtnException: If either person is not found
+        """
+        # Find both people
+        person1 = self._db_person_find_by_url_name_user(url_name_user1)
+        person2 = self._db_person_find_by_url_name_user(url_name_user2)
+        
+        # Get shared activities
+        shared_activities_db = self.neo_db.get_shared_activities(person1, person2)
+        shared_activities = [_activity_to_info(a) for a in shared_activities_db]
+        
+        return TwoPersonActivityInfo(
+            person1=_person_to_info(person1),
+            person2=_person_to_info(person2),
+            shared_activities=shared_activities
+        )
 
 
 
