@@ -234,8 +234,7 @@ def scrape(
     password: t.Annotated[str, typer.Option("-p", envvar=econfig.MTN_WEB_PASSWORD, help="Login password")] = None,
 ):
     """Scrape activity data from the mountaineers website."""
-    print("scrape")
-    
+   
     # Use business logic layer
     with util.make_neo4j_db() as neo_db:
         logic = mtn_logic.MountaineerLogic(neo_db)
@@ -326,6 +325,89 @@ def history(
             history_table.add_row(str(i), str(activity.date_start), activity.name, activity.activity_type, participation.role)
             i += 1
         print(Padding.indent(history_table, 4))
+
+
+@app.command()
+def lsscrape(
+    sort: t.Annotated[str, typer.Option(help="Sort order: 'name' (default) or 'date'")] = "name"
+):
+    """
+    List all people who have had their activities scraped.
+    
+    Shows people with [bold yellow]act_is_scrapped=True[/bold yellow], displaying their name,
+    activity scrape timestamp, profile scrape timestamp, and profile URL.
+    """
+    
+    if sort not in ["name", "date"]:
+        print(f"Error: Invalid sort option '{sort}'. Use 'name' or 'date'.")
+        return
+    
+    # Use business logic layer
+    with util.make_neo4j_db() as neo_db:
+        logic = mtn_logic.MountaineerLogic(neo_db)
+        
+        try:
+            people = logic.list_scraped_people(sort_by=sort)
+        except Exception as e:
+            print(f"Error: {e}")
+            return
+        
+        if not people:
+            print("No people with scraped activities found.")
+            return
+        
+        # Display table
+        print(f"\n[bold]People with Scraped Activities ({len(people)}):[/bold]")
+        
+        scrape_table = Table(
+            "Name", 
+            "Activity Scraped", 
+            "Profile Scraped", 
+            "Profile URL",
+            box=TABLE_BOX_STYE
+        )
+        scrape_table.columns[0].max_width = 30
+        scrape_table.columns[3].max_width = 80
+        scrape_table.columns[3].overflow = "ignore"
+
+        
+        for person in people:
+            act_scrape_str = person.act_last_scrapped.strftime('%Y-%m-%d %H:%M') if person.act_last_scrapped else "Never"
+            prof_scrape_str = person.prof_last_scrapped.strftime('%Y-%m-%d %H:%M') if person.prof_last_scrapped else "Never"
+            
+            scrape_table.add_row(
+                person.full_name,
+                act_scrape_str,
+                prof_scrape_str,
+                person.profile_url
+            )
+        
+        print(Padding.indent(scrape_table, 2))
+        print("")
+
+
+@app.command()
+def rmscrape(
+    people: t.Annotated[list[str], typer.Argument(help="One or more people (name, profile url, or username)")]
+):
+    """
+    Remove people from activity scraping by setting act_is_scrapped to False.
+    
+    Takes one or more person identifiers. For each person, sets [bold yellow]act_is_scrapped=False[/bold yellow]
+    while leaving [bold yellow]act_last_scrapped[/bold yellow] unchanged. If a person is not found, 
+    the command continues to the next person.
+    """
+    
+    # Use business logic layer
+    with util.make_neo4j_db() as neo_db:
+        logic = mtn_logic.MountaineerLogic(neo_db)
+        
+        for person_identifier in people:
+            try:
+                updated_person = logic.remove_person_from_scrape(person_identifier)
+                print(f"✓ {updated_person.full_name}: Removed from activity scraping (act_is_scrapped=False)")
+            except mtn_logic.MtnException:
+                print(f"✗ {person_identifier}: Person not found")
 
 
 if __name__ == "__main__":

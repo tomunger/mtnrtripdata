@@ -278,6 +278,29 @@ class Neo4jDB:
         return persons
 
 
+    def persons_with_act_scraped(self) -> list[Person]:
+        """Get all people who have had their activities scraped (act_is_scrapped = True).
+        
+        Returns:
+            list of Person objects with act_is_scrapped = True, unsorted
+        """
+        persons = []
+        with self.session() as session:
+            result = session.run(
+                """
+                MATCH (p:Person)
+                WHERE p.act_is_scrapped = true
+                RETURN p, elementId(p) as person_id
+                """
+            )
+            
+            for record in result:
+                person_data = dict(record["p"])
+                person_data["_neo4j_id"] = record["person_id"]
+                persons.append(Person.from_dict(person_data))
+        return persons
+
+
 
     def person_update(self, person: Person) -> Person:
         """Update an existing Person node."""
@@ -290,6 +313,29 @@ class Neo4jDB:
                 id=person._neo4j_id,
                 props=person.to_dict()
             )
+            return person
+
+
+    def person_set_act_scrapped(self, person: Person, is_scrapped: bool) -> Person:
+        """Set the act_is_scrapped flag for a person.
+        
+        Args:
+            person: The person to update
+            is_scrapped: The value to set for act_is_scrapped
+            
+        Returns:
+            Updated Person object
+        """
+        if person._neo4j_id is None:
+            raise ValueError("Cannot update person without Neo4j ID")
+        
+        with self.session() as session:
+            session.run(
+                "MATCH (p:Person) WHERE elementId(p) = $id SET p.act_is_scrapped = $is_scrapped",
+                id=person._neo4j_id,
+                is_scrapped=is_scrapped
+            )
+            person.act_is_scrapped = is_scrapped
             return person
 
 

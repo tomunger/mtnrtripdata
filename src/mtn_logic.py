@@ -535,3 +535,43 @@ class MountaineerLogic:
             results["errors"].append(str(e))
         
         return results
+
+
+    def list_scraped_people(self, sort_by: str = "name") -> list[PersonInfo]:
+        """
+        Get all people who have had their activities scraped.
+        
+        Args:
+            sort_by: Sort order - 'name' (default) or 'date' (by act_last_scrapped ascending)
+            
+        Returns:
+            List of PersonInfo objects for people with act_is_scrapped = True
+        """
+        persons = self.neo_db.persons_with_act_scraped()
+        person_infos = [_person_to_info(p) for p in persons]
+        
+        if sort_by == "date":
+            # Sort by act_last_scrapped, handling None values (put them at the end)
+            person_infos.sort(key=lambda p: p.act_last_scrapped if p.act_last_scrapped else datetime.datetime.max)
+        else:  # default to name
+            person_infos.sort(key=lambda p: p.full_name.lower())
+        
+        return person_infos
+
+
+    def remove_person_from_scrape(self, url_name_user: str) -> PersonInfo:
+        """
+        Set act_is_scrapped to False for a person to remove them from activity scraping.
+        
+        Args:
+            url_name_user: Person's profile URL, full name, or username
+            
+        Returns:
+            Updated PersonInfo object
+            
+        Raises:
+            MtnException: If the person is not found
+        """
+        person = self._db_person_find_by_url_name_user(url_name_user)
+        updated_person = self.neo_db.person_set_act_scrapped(person, False)
+        return _person_to_info(updated_person)

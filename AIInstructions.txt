@@ -15,3 +15,11 @@ Also, write scripts that will update the database, renaming the existing fields.
 Code a new command, 'whowho'.  This takes two parameters, person1 and person2.  Both identify people.  Find both people in the database.  
 Then find what activities the two did together.  Follow the pattern for the command whowith.  The output should be similar.  The output should indicate if each person 
 has had their mountaineer activities scraped (field act_is_scrapped)
+
+
+
+Code a new command, 'lsscrape'.  This will find all people who have had their activity scraped (act_is_scrapped).  It will take one optional argument, '--sort'.  A value of 'name' is the default and causes the output to be sorted by person name.  A value of 'date' causes the output to be sorted by act_last_scrapped ascending.  The output should be in table form, containing name, act_last_scrapped, prof_last_scrapped, and profile URL.
+
+
+Code a new command, 'rmscrape'.  This will set database field act_is_scrapped to false to indicate the person's activities are not being scraped.  act_last_scrapped is not changed.  the command line takes a list of parameters, each a person, and applies the operation to each person.  If a person is not found, the command proceeds to the next person.  Output from the command is one line for each person and indicator of success or person not found.  in mtn_logic, the function will take just one person and operate on them.  
+
