@@ -122,24 +122,24 @@ class Neo4jScrapester():
         delta: datetime.timedelta | None = None
         time_end = datetime.datetime.combine(mtn_activity.date_end, datetime.time(0,0,0))
         if mtn_activity.status == mtnweb.ACTIVITY_STATUS_FUTURE:
-            # Future activities are scraped every 12 hours
-            delta = datetime.timedelta(hours=12)
+            # Future activities are scraped more often
+            delta = datetime.timedelta(days=2)
         elif mtn_activity.status == mtnweb.ACTIVITY_STATUS_PAST:
             # Past activities are scrapped in increasing intervals.
             time_closed = datetime.datetime.now() - time_end
             if time_closed.days < 7:
-                delta = datetime.timedelta(days=1)
+                delta = datetime.timedelta(hours=30)
             elif time_closed.days < 90:
-                delta = datetime.timedelta(days=7)
-            elif time_closed.days < 365:
-                delta = datetime.timedelta(days=30)
+                delta = datetime.timedelta(days=14)
+            elif time_closed.days < 180:
+                delta = datetime.timedelta(days=45)
             # More than 365 and we give up.
         else: # mtnweb.ACTIVITY_STATUS_CLOSED
             time_closed = datetime.datetime.now() - time_end
             if time_closed.days < 7:
-                delta = datetime.timedelta(seconds=max(60 * 60 * 6, 2 * time_closed.seconds))
+                delta = datetime.timedelta(days=1)
             elif time_closed.days < 90:
-                delta = datetime.timedelta(days=21)
+                delta = datetime.timedelta(days=30)
                 # Over 90 days we assume all changes are complete.
 
         if delta:
