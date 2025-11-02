@@ -271,10 +271,10 @@ class Neo4jDB:
             else:
                 result = session.run(query, cutoff=cutoff_str)
             
-        for record in result:
-            person_data = dict(record["p"])
-            person_data["_neo4j_id"] = record["person_id"]
-            persons.append(Person.from_dict(person_data))
+            for record in result:
+                person_data = dict(record["p"])
+                person_data["_neo4j_id"] = record["person_id"]
+                persons.append(Person.from_dict(person_data))
         return persons
 
 

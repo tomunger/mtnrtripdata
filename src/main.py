@@ -275,7 +275,7 @@ def scrapedue(
         people_list = logic.persons_act_due_scrape(scrape_cutoff_date, limit=limit)
 
         for person in people_list:
-            print(f"{person.full_name} (last scraped: {person.prof_last_scrapped})")
+            print(f"{person.full_name} (last scraped: {person.act_last_scrapped})")
             try:
                 result = logic.scrape_person_activities(
                     username=econfig.get(econfig.MTN_WEB_USERNAME),
