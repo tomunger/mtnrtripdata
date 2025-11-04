@@ -6,6 +6,7 @@ import datetime
 from dataclasses import dataclass, field, asdict
 from neo4j import GraphDatabase, Driver, Session
 import econfig
+import math
 
 
 
@@ -247,10 +248,12 @@ class Neo4jDB:
             return None
 
 
-    def persons_act_due_scrape(self, cutoff_date: datetime.date, limit: int = 0) -> list[Person]:
+    def persons_act_due_scrape(self, cutoff_date: datetime.date, limit: int = 0, proportional: bool = False) -> list[Person]:
         """Get list of people due to have their activities scrapped.
         Args:
             cutoff_date: Scrape all persons whose act_last_scrapped is on or before this date.
+            limit: max number of people to scrape.  <= 0 means no limit.
+            proportional:  Calculate the number of people as ceil(1/cutoff_date), but not larger than limit
 
         Returns:
             list of Person objects due for activity scraping.
@@ -259,6 +262,25 @@ class Neo4jDB:
         persons = []
         cutoff_str = cutoff_date.isoformat()
         with self.session() as session:
+            if proportional:
+                # Calculate proportional limit: ceil(total_people_with_act_is_scrapped / days_since_cutoff)
+                total_people_result = session.run(
+                    "MATCH (p:Person) WHERE p.act_is_scrapped = true RETURN count(p) as total"
+                )
+                total_people = total_people_result.single()["total"]
+
+                # Calculate days since cutoff (assuming cutoff is in the past)
+                days_since = (datetime.date.today() - cutoff_date.date()).days
+                if days_since <= 0:
+                    days_since = 1
+                    
+                proportional_limit = math.ceil(total_people / days_since)
+                if limit > 0:
+                    limit = min(limit, proportional_limit)
+                else:
+                    limit = proportional_limit
+
+            # Now find the people due scrape.
             query = """
             MATCH (p:Person)
             WHERE p.act_is_scrapped and p.act_last_scrapped <= $cutoff

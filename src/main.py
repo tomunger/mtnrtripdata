@@ -260,19 +260,35 @@ def scrape(
 
 @app.command()
 def scrapedue(
-    days_past: t.Annotated[float, typer.Option("-d", help="Number of days since person was last scraped.  A float, may include fractional days: 3.5")] = 4,
+    days_past: t.Annotated[float, typer.Option("-d", "--days", help="Number of days since person was last scraped.  A float, may include fractional days: 3.5")] = 4,
     browser: t.Annotated[bool, typer.Option("-b", help="Show browser window")] = False,
     fsf: t.Annotated[bool, typer.Option(help="Force scrape all future activities")] = False,
-    limit: t.Annotated[int, typer.Option(help="Limit the number scraped")] = 0,
+    limit: t.Annotated[int, typer.Option("-l", "--limit", help="Limit the number scraped")] = 0,
+    proportional: t.Annotated[bool, typer.Option("-p", "--proportional", help="Limit the scrape to a proportional number based on days_past.  If you want to scrape everyone every N days, assuming one run per day, ceil(1/N) people's activiteis are scrapped.")] = False,
 ):
-    """Show activities that are due for scraping within the next N days."""
+    """Scrape the activity profile of people who are due to have their activities updated.  
+    There are a couple stratigies for choosing which people's activities get updated.  
+    
+    By Date
+      -d N : set the number of days past.  Everyone who's last scrape is before that time will be updated.
+
+    Proportional
+      -d N -p: Set the number of past days but limit the number of people updated to 1/N.  
+                This assumes one run per day and will have the effect of updating 1/N of the people 
+                every run and all people will get updated every N days.
+
+    Limit
+      -d N -l L : Limit the number of people updated.  Assuming one run per day, everyone will 
+                get updated every L days.  If N < L then N has little effect.  If N > L then'
+                it controls how often profiles are updated.
+    """
     scrape_cutoff_date = datetime.datetime.now() - datetime.timedelta(days=days_past)
     
     # Use business logic layer
     with util.make_neo4j_db() as neo_db:
         logic = mtn_logic.MountaineerLogic(neo_db)
         
-        people_list = logic.persons_act_due_scrape(scrape_cutoff_date, limit=limit)
+        people_list = logic.persons_act_due_scrape(scrape_cutoff_date, limit=limit, proportional=proportional)
 
         for person in people_list:
             print(f"{person.full_name} (last scraped: {person.act_last_scrapped})")

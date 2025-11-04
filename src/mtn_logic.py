@@ -161,9 +161,9 @@ class MountaineerLogic:
         return _person_to_info(person) if person else None
 
 
-    def persons_act_due_scrape(self, cutoff_date: datetime.date, limit: int = 0) -> list[PersonInfo]:
+    def persons_act_due_scrape(self, cutoff_date: datetime.date, limit: int = 0, proportional: bool = False) -> list[PersonInfo]:
         """Get list of people due for scraping based on cutoff date."""
-        persons = self.neo_db.persons_act_due_scrape(cutoff_date, limit=limit)
+        persons = self.neo_db.persons_act_due_scrape(cutoff_date, limit=limit, proportional=proportional)
 
         return [_person_to_info(p) for p in persons]   
 
